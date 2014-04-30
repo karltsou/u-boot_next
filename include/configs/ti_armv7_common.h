@@ -42,7 +42,7 @@
 /*
  * Default to a quick boot delay.
  */
-#define CONFIG_BOOTDELAY		1
+#define CONFIG_BOOTDELAY		3
 
 /*
  * DDR information.  If the CONFIG_NR_DRAM_BANKS is not defined,
@@ -159,7 +159,7 @@
 #if defined(CONFIG_MMC) || defined(CONFIG_USB_STORAGE)
 #define CONFIG_DOS_PARTITION
 #define CONFIG_CMD_FAT
-#define CONFIG_FAT_WRITE
+#undef  CONFIG_FAT_WRITE
 #define CONFIG_CMD_EXT2
 #define CONFIG_CMD_EXT4
 #define CONFIG_CMD_FS_GENERIC
@@ -178,6 +178,27 @@
 #define CONFIG_SPL_FRAMEWORK
 #define CONFIG_SPL_OS_BOOT
 
+#define CONFIG_SD_BOOT
+#ifdef CONFIG_SD_BOOT
+
+/*
+ * 64 bytes before this address should be set aside for u-boot.img's
+ * header. That is 80E7FFC0--0x80E80000 should not be used for any
+ * other needs.
+ */
+#define CONFIG_SYS_TEXT_BASE            0x80E80000
+
+/*
+ * BSS and malloc area 64MB into memory to allow enough
+ * space for the kernel at the beginning of memory
+ */
+#define CONFIG_SPL_BSS_START_ADDR       0x84000000
+#define CONFIG_SPL_BSS_MAX_SIZE         0x100000        /* 1 MB */
+#define CONFIG_SYS_SPL_MALLOC_START     0x84100000
+#define CONFIG_SYS_SPL_MALLOC_SIZE      0x100000        /* 1 MB */
+
+#else
+
 /*
  * Place the image at the start of the ROM defined image space.
  * We limit our size to the ROM-defined downloaded image area, and use the
@@ -194,6 +215,7 @@
 #define CONFIG_SYS_SPL_MALLOC_START	(CONFIG_SPL_BSS_START_ADDR + \
 					 CONFIG_SPL_BSS_MAX_SIZE)
 #define CONFIG_SYS_SPL_MALLOC_SIZE	CONFIG_SYS_MALLOC_LEN
+#endif
 
 /* RAW SD card / eMMC locations. */
 #define CONFIG_SYS_MMCSD_RAW_MODE_U_BOOT_SECTOR	0x300 /* address 0x60000 */
