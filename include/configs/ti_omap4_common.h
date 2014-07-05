@@ -24,6 +24,10 @@
 
 #define CONFIG_SYS_THUMB_BUILD
 
+/*
+ * CACHE Configuration Options
+ */
+#define CONFIG_SYS_ICACHE_OFF
 #ifndef CONFIG_SYS_L2CACHE_OFF
 #define CONFIG_SYS_L2_PL310		1
 #define CONFIG_SYS_PL310_BASE	0x48242000
