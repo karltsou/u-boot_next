@@ -113,6 +113,11 @@ enum {
 	MX6_PAD_KEY_ROW2__KPP_ROW_2				= IOMUX_PAD(0x049C, 0x0194, 0, 0x075C, 0, 0),
 	MX6_PAD_KEY_ROW3__KPP_ROW_3				= IOMUX_PAD(0x04A0, 0x0198, 0, 0x0760, 0, 0),
 
+	MX6_PAD_KEY_ROW0__GPIO_3_25                             = IOMUX_PAD(0x0494, 0x018C, 5, 0x0000, 0, 0),
+	MX6_PAD_KEY_ROW1__GPIO_3_27                             = IOMUX_PAD(0x0498, 0x0190, 5, 0x0000, 0, 0),
+	MX6_PAD_KEY_ROW2__GPIO_3_29                             = IOMUX_PAD(0x049C, 0x0194, 5, 0x0000, 0, 0),
+	MX6_PAD_KEY_ROW3__GPIO_3_31                             = IOMUX_PAD(0x04A0, 0x0198, 5, 0x0000, 0, 0),
+
 	MX6_PAD_KEY_COL4__USB_USBOTG1_PWR       = IOMUX_PAD(0x0484, 0x017C, 6, 0x0000, 0, 0),
 	MX6_PAD_KEY_COL5__USB_USBOTG2_PWR       = IOMUX_PAD(0x0488, 0x0180, 6, 0x0000, 0, 0),
 

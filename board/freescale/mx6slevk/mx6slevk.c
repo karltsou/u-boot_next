@@ -226,6 +226,26 @@ void setup_spinor(void)
 }
 #endif
 
+#define BQ24250_CS   IMX_GPIO_NR(3, 31)
+#define BQ24250_EN1  IMX_GPIO_NR(3, 27)
+#define BQ24250_EN2  IMX_GPIO_NR(3, 29)
+iomux_v3_cfg_t const mxc_battery_pads[] = {
+        (MX6_PAD_KEY_ROW0__GPIO_3_25 | MUX_PAD_CTRL(NO_PAD_CTRL)),
+        (MX6_PAD_KEY_ROW1__GPIO_3_27 | MUX_PAD_CTRL(NO_PAD_CTRL)),
+        (MX6_PAD_KEY_ROW2__GPIO_3_29 | MUX_PAD_CTRL(NO_PAD_CTRL)),
+        (MX6_PAD_KEY_ROW3__GPIO_3_31 | MUX_PAD_CTRL(NO_PAD_CTRL)),
+};
+int setup_mxc_battery(void)
+{
+        imx_iomux_v3_setup_multiple_pads(mxc_battery_pads,
+                        ARRAY_SIZE(mxc_battery_pads));
+
+	gpio_direction_output(BQ24250_CS, 1);
+	gpio_direction_output(BQ24250_EN1, 0);
+	gpio_direction_output(BQ24250_EN2, 0);
+        return 0;
+}
+
 #ifdef CONFIG_FSL_ESDHC
 
 #define USDHC1_CD_GPIO	IMX_GPIO_NR(4, 7)
@@ -868,7 +888,7 @@ int board_late_init(void)
 #ifdef CONFIG_ENV_IS_IN_MMC
 	board_late_mmc_env_init();
 #endif
-
+	setup_mxc_battery();
 	return 0;
 }
 

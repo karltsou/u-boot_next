@@ -53,7 +53,8 @@
 #define CONFIG_VOL_DOWN_KEY     KEY_BACK
 #define CONFIG_POWER_KEY        KEY_5
 
-#define CONFIG_MXC_KPD
+/* #define CONFIG_MXC_KPD */
+#ifdef CONFIG_MXC_KPD
 #define CONFIG_MXC_KEYMAPPING \
 	{       \
 		KEY_SELECT, KEY_BACK, KEY_1,     KEY_2, \
@@ -63,7 +64,7 @@
 	}
 #define CONFIG_MXC_KPD_COLMAX 4
 #define CONFIG_MXC_KPD_ROWMAX 4
-
+#endif
 
 #undef CONFIG_EXTRA_ENV_SETTINGS
 #undef CONFIG_BOOTCOMMAND
