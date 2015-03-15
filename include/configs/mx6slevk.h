@@ -87,7 +87,7 @@
 #define CONFIG_CMD_I2C
 #define CONFIG_SYS_I2C
 #define CONFIG_SYS_I2C_MXC
-#define CONFIG_SYS_I2C_SPEED		100000
+#define CONFIG_SYS_I2C_SPEED		400000
 
 /* Command definition */
 #include <config_cmd_default.h>
@@ -280,7 +280,7 @@
 	#define CONFIG_SYS_CONSOLE_IS_IN_ENV
 #ifdef CONFIG_MXC_EPDC
 	#undef LCD_TEST_PATTERN
-	/* #define CONFIG_SPLASH_IS_IN_MMC			1 */
+	/* #define CONFIG_SPLASH_IS_IN_MMC		1 */
 	#define LCD_BPP					LCD_MONOCHROME
 	/* #define CONFIG_SPLASH_SCREEN_ALIGN		1 */
 

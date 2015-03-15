@@ -199,7 +199,7 @@ static void setup_iomux_uart(void)
 {
 	imx_iomux_v3_setup_multiple_pads(uart1_pads, ARRAY_SIZE(uart1_pads));
 }
-
+#ifdef CONFIG_FEC_MXC
 static void setup_iomux_fec(void)
 {
 	imx_iomux_v3_setup_multiple_pads(fec_pads, ARRAY_SIZE(fec_pads));
@@ -209,7 +209,7 @@ static void setup_iomux_fec(void)
 	udelay(1000);
 	gpio_set_value(ETH_PHY_RESET, 1);
 }
-
+#endif
 #ifdef CONFIG_SYS_USE_SPINOR
 iomux_v3_cfg_t const ecspi1_pads[] = {
 	MX6_PAD_ECSPI1_SCLK__ECSPI1_SCLK | MUX_PAD_CTRL(SPI_PAD_CTRL),
@@ -247,7 +247,21 @@ static void mxc_board_init_power(void)
 	gpio_direction_output(BQ24250_EN1, 0);
 	gpio_direction_output(BQ24250_EN2, 0);
 }
+#define BQ24250_ADDRESS  0x6A
+static int setup_battery(void)
+{
+	unsigned char status = 0;
+	i2c_set_bus_num(0);
+        if (!i2c_probe(BQ24250_ADDRESS)) {
+                if (i2c_read(BQ24250_ADDRESS, 0, 1, &status, 1)) {
+                        printf("BAT: register#1 read error!\n");
+                        return -1;
+                }
+		printf("BAT: register#1 0x=%x\n",status);
+	}
 
+	return 0;
+}
 #ifdef CONFIG_FSL_ESDHC
 
 #define USDHC1_CD_GPIO	IMX_GPIO_NR(4, 7)
@@ -910,6 +924,9 @@ int board_late_init(void)
 	setup_i2c(0, CONFIG_SYS_I2C_SPEED,
 			0x7f, &i2c_pad_info0);
 	ret = setup_pmic_voltages();
+	if (ret)
+		return -1;
+	ret = setup_battery();
 	if (ret)
 		return -1;
 #endif
