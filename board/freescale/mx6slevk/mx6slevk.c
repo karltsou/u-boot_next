@@ -160,16 +160,16 @@ static iomux_v3_cfg_t const epdc_enable_pads[] = {
 	MX6_PAD_EPDC_D7__EPDC_SDDO_7	| MUX_PAD_CTRL(EPDC_PAD_CTRL),
 	MX6_PAD_EPDC_GDCLK__EPDC_GDCLK	| MUX_PAD_CTRL(EPDC_PAD_CTRL),
 	MX6_PAD_EPDC_GDSP__EPDC_GDSP	| MUX_PAD_CTRL(EPDC_PAD_CTRL),
-	MX6_PAD_EPDC_GDOE__EPDC_GDOE	| MUX_PAD_CTRL(EPDC_PAD_CTRL),
-	MX6_PAD_EPDC_GDRL__EPDC_GDRL	| MUX_PAD_CTRL(EPDC_PAD_CTRL),
+	/* MX6_PAD_EPDC_GDOE__EPDC_GDOE	| MUX_PAD_CTRL(EPDC_PAD_CTRL), */
+	/* MX6_PAD_EPDC_GDRL__EPDC_GDRL	| MUX_PAD_CTRL(EPDC_PAD_CTRL), */
 	MX6_PAD_EPDC_SDCLK__EPDC_SDCLK	| MUX_PAD_CTRL(EPDC_PAD_CTRL),
 	MX6_PAD_EPDC_SDOE__EPDC_SDOE	| MUX_PAD_CTRL(EPDC_PAD_CTRL),
 	MX6_PAD_EPDC_SDLE__EPDC_SDLE	| MUX_PAD_CTRL(EPDC_PAD_CTRL),
-	MX6_PAD_EPDC_SDSHR__EPDC_SDSHR	| MUX_PAD_CTRL(EPDC_PAD_CTRL),
-	MX6_PAD_EPDC_BDR0__EPDC_BDR_0	| MUX_PAD_CTRL(EPDC_PAD_CTRL),
+	/* MX6_PAD_EPDC_SDSHR__EPDC_SDSHR	| MUX_PAD_CTRL(EPDC_PAD_CTRL), */
+	/* MX6_PAD_EPDC_BDR0__EPDC_BDR_0	| MUX_PAD_CTRL(EPDC_PAD_CTRL), */
 	MX6_PAD_EPDC_SDCE0__EPDC_SDCE_0	| MUX_PAD_CTRL(EPDC_PAD_CTRL),
-	MX6_PAD_EPDC_SDCE1__EPDC_SDCE_1	| MUX_PAD_CTRL(EPDC_PAD_CTRL),
-	MX6_PAD_EPDC_SDCE2__EPDC_SDCE_2	| MUX_PAD_CTRL(EPDC_PAD_CTRL),
+	/* MX6_PAD_EPDC_SDCE1__EPDC_SDCE_1	| MUX_PAD_CTRL(EPDC_PAD_CTRL), */
+	/* MX6_PAD_EPDC_SDCE2__EPDC_SDCE_2	| MUX_PAD_CTRL(EPDC_PAD_CTRL), */
 };
 
 static iomux_v3_cfg_t const epdc_disable_pads[] = {
@@ -229,21 +229,23 @@ void setup_spinor(void)
 #define BQ24250_CS   IMX_GPIO_NR(3, 31)
 #define BQ24250_EN1  IMX_GPIO_NR(3, 27)
 #define BQ24250_EN2  IMX_GPIO_NR(3, 29)
-iomux_v3_cfg_t const mxc_battery_pads[] = {
+#define WM8962_POWER IMX_GPIO_NR(3, 28)
+iomux_v3_cfg_t const mxc_power_pins[] = {
         (MX6_PAD_KEY_ROW0__GPIO_3_25 | MUX_PAD_CTRL(NO_PAD_CTRL)),
         (MX6_PAD_KEY_ROW1__GPIO_3_27 | MUX_PAD_CTRL(NO_PAD_CTRL)),
         (MX6_PAD_KEY_ROW2__GPIO_3_29 | MUX_PAD_CTRL(NO_PAD_CTRL)),
         (MX6_PAD_KEY_ROW3__GPIO_3_31 | MUX_PAD_CTRL(NO_PAD_CTRL)),
+	(MX6_PAD_KEY_COL2__GPIO_3_28 | MUX_PAD_CTRL(NO_PAD_CTRL)),
 };
-int setup_mxc_battery(void)
+static void mxc_board_init_power(void)
 {
-        imx_iomux_v3_setup_multiple_pads(mxc_battery_pads,
-                        ARRAY_SIZE(mxc_battery_pads));
+	imx_iomux_v3_setup_multiple_pads(mxc_power_pins,
+			ARRAY_SIZE(mxc_power_pins));
 
+	gpio_direction_output(WM8962_POWER, 1);
 	gpio_direction_output(BQ24250_CS, 1);
 	gpio_direction_output(BQ24250_EN1, 0);
 	gpio_direction_output(BQ24250_EN2, 0);
-        return 0;
 }
 
 #ifdef CONFIG_FSL_ESDHC
@@ -454,8 +456,16 @@ struct epdc_timing_params panel_timings = {
 	.num_ce = 1,
 };
 
+#define EPDC_PWR_EN  IMX_GPIO_NR(4, 3)
+#define TPS185WAK    IMX_GPIO_NR(1, 26)
+iomux_v3_cfg_t const mxc_epdc_power_pins[] = {
+        (MX6_PAD_KEY_ROW5__GPIO_4_3 | MUX_PAD_CTRL(NO_PAD_CTRL)),
+	(MX6_PAD_EPDC_SDSHR__GPIO_1_26 | MUX_PAD_CTRL(NO_PAD_CTRL)),
+};
 static void setup_epdc_power(void)
 {
+	/* uncomment for EPDC hardware change */
+	#if 0
 	/* Setup epdc voltage */
 
 	/* EPDC_PWRSTAT - GPIO2[13] for PWR_GOOD status */
@@ -481,6 +491,21 @@ static void setup_epdc_power(void)
 				MUX_PAD_CTRL(EPDC_PAD_CTRL));
 	/* Set as output */
 	gpio_direction_output(IMX_GPIO_NR(2, 7), 1);
+	#endif
+
+	/* EPDC_ */
+	imx_iomux_v3_setup_multiple_pads(mxc_epdc_power_pins,
+	                        ARRAY_SIZE(mxc_epdc_power_pins));
+        /* Set as output */
+        gpio_direction_output(EPDC_PWR_EN, 1);
+	gpio_direction_output(TPS185WAK, 1);
+
+        /* EPDC_VCOM0 - GPIO2[3] for VCOM control */
+        imx_iomux_v3_setup_pad(MX6_PAD_EPDC_VCOM0__GPIO_2_3 |
+                                MUX_PAD_CTRL(EPDC_PAD_CTRL));
+
+        /* Set as output */
+        gpio_direction_output(IMX_GPIO_NR(2, 3), 1);
 }
 
 int setup_waveform_file(void)
@@ -536,6 +561,8 @@ static void setup_epdc(void)
 
 	/*** epdc Maxim PMIC settings ***/
 
+	/* uncomment for EPDC hardware change */
+	#if 0
 	/* EPDC PWRSTAT - GPIO2[13] for PWR_GOOD status */
 	imx_iomux_v3_setup_pad(MX6_PAD_EPDC_PWRSTAT__GPIO_2_13 |
 				MUX_PAD_CTRL(EPDC_PAD_CTRL));
@@ -551,6 +578,7 @@ static void setup_epdc(void)
 	/* EIM_A18 - GPIO2[7] for EPD PWR CTL0 */
 	imx_iomux_v3_setup_pad(MX6_PAD_EPDC_PWRCTRL0__GPIO_2_7 |
 				MUX_PAD_CTRL(EPDC_PAD_CTRL));
+	#endif
 
 	/*** Set pixel clock rates for EPDC ***/
 
@@ -863,6 +891,7 @@ int board_init(void)
 	/* address of boot parameters */
 	gd->bd->bi_boot_params = PHYS_SDRAM + 0x100;
 
+	mxc_board_init_power();
 #ifdef	CONFIG_FEC_MXC
 	setup_fec();
 #endif
@@ -888,7 +917,6 @@ int board_late_init(void)
 #ifdef CONFIG_ENV_IS_IN_MMC
 	board_late_mmc_env_init();
 #endif
-	setup_mxc_battery();
 	return 0;
 }
 
