@@ -67,7 +67,8 @@
 #define CONFIG_CMD_DHCP
 #define CONFIG_CMD_MII
 #define CONFIG_CMD_NET
-#define CONFIG_FEC_MXC
+/* uncomment for hardware doesn't support */
+/* #define CONFIG_FEC_MXC */
 #define CONFIG_MII
 #define IMX_FEC_BASE			ENET_BASE_ADDR
 #define CONFIG_FEC_XCV_TYPE		RMII
@@ -263,7 +264,7 @@
 #define CONFIG_CMD_CACHE
 #endif
 
-/*#define CONFIG_SPLASH_SCREEN*/
+#define CONFIG_SPLASH_SCREEN
 
 /*
  * SPLASH SCREEN Configs
