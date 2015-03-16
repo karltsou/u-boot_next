@@ -244,7 +244,7 @@ static void mxc_board_init_power(void)
 
 	gpio_direction_output(WM8962_POWER, 1);
 	gpio_direction_output(BQ24250_CS, 1);
-	gpio_direction_output(BQ24250_EN1, 0);
+	gpio_direction_output(BQ24250_EN1, 1);
 	gpio_direction_output(BQ24250_EN2, 0);
 }
 #define BQ24250_ADDRESS  0x6A
@@ -257,9 +257,16 @@ static int setup_battery(void)
                         printf("BAT: register#1 read error!\n");
                         return -1;
                 }
-		printf("BAT: register#1 0x=%x\n",status);
+		printf("BAT: register#1 0x%x\n",status);
 	}
 
+	if (!i2c_probe(BQ24250_ADDRESS)) {
+                if (i2c_read(BQ24250_ADDRESS, 1, 1, &status, 1)) {
+                        printf("BAT: register#2 read error!\n");
+                        return -1;
+                }
+		printf("BAT: register#2 0x%x\n",status);
+	}
 	return 0;
 }
 #ifdef CONFIG_FSL_ESDHC
