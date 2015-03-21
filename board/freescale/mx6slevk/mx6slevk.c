@@ -80,6 +80,18 @@ struct i2c_pads_info i2c_pad_info0 = {
 		.gp = IMX_GPIO_NR(3, 12),
 	},
 };
+struct i2c_pads_info i2c_pad_info1 = {
+	.sda = {
+		.i2c_mode = MX6_PAD_I2C2_SDA__I2C2_SDA | PC,
+		.gpio_mode = MX6_PAD_I2C2_SDA__GPIO_3_15 | PC,
+		.gp = IMX_GPIO_NR(3, 15),
+	},
+	.scl = {
+		.i2c_mode = MX6_PAD_I2C2_SCL__I2C2_SCL | PC,
+		.gpio_mode = MX6_PAD_I2C2_SCL__GPIO_3_14 | PC,
+		.gp = IMX_GPIO_NR(3, 14),
+	},
+};
 #endif
 
 int dram_init(void)
@@ -224,12 +236,14 @@ void setup_spinor(void)
 #define BQ24250_EN1  IMX_GPIO_NR(3, 27)
 #define BQ24250_EN2  IMX_GPIO_NR(3, 29)
 #define WM8962_POWER IMX_GPIO_NR(3, 28)
+#define GSENSOR_INT  IMX_GPIO_NR(4, 5)
 iomux_v3_cfg_t const mxc_power_pins[] = {
         (MX6_PAD_KEY_ROW0__GPIO_3_25 | MUX_PAD_CTRL(NO_PAD_CTRL)),
         (MX6_PAD_KEY_ROW1__GPIO_3_27 | MUX_PAD_CTRL(NO_PAD_CTRL)),
         (MX6_PAD_KEY_ROW2__GPIO_3_29 | MUX_PAD_CTRL(NO_PAD_CTRL)),
         (MX6_PAD_KEY_ROW3__GPIO_3_31 | MUX_PAD_CTRL(NO_PAD_CTRL)),
 	(MX6_PAD_KEY_COL2__GPIO_3_28 | MUX_PAD_CTRL(NO_PAD_CTRL)),
+	(MX6_PAD_KEY_ROW6__GPIO_4_5  | MUX_PAD_CTRL(NO_PAD_CTRL)),
 };
 static void mxc_board_init_power(void)
 {
@@ -240,6 +254,7 @@ static void mxc_board_init_power(void)
 	gpio_direction_output(BQ24250_CS, 1);
 	gpio_direction_output(BQ24250_EN1, 1);
 	gpio_direction_output(BQ24250_EN2, 0);
+	gpio_direction_input(GSENSOR_INT);
 }
 #define BQ24250_ADDRESS  0x6A
 static int setup_battery(void)
@@ -262,6 +277,29 @@ static int setup_battery(void)
 		printf("BAT: register#2 0x%x\n",status);
 	}
 	return 0;
+}
+#define TPS65185_ADDRESS  0x68
+static int setup_tps65185(void)
+{
+        unsigned char status = 0;
+	unsigned char value = 0;
+        i2c_set_bus_num(1);
+
+	value = 0x3f;
+        if (i2c_write(TPS65185_ADDRESS, 0x1, 1, &value, 1)) {
+                printf("Set SW1AB mode error!\n");
+                return -1;
+        }
+
+        if (!i2c_probe(TPS65185_ADDRESS)) {
+                if (i2c_read(TPS65185_ADDRESS, 1, 1, &status, 1)) {
+                        printf("TPS: register 0x01h read error!\n");
+                        return -1;
+                }
+                printf("TPS: register 0x01h-0x%x\n",status);
+        }
+
+        return 0;
 }
 #ifdef CONFIG_FSL_ESDHC
 
@@ -530,14 +568,16 @@ int setup_waveform_file(void)
 	uint blk_start, blk_cnt, n;
 
 	if (!mmc) {
-		printf("MMC Device %d not found\n", mmc_dev);
+		printf("MMC: device %d not found\n", mmc_dev);
 		return -1;
 	}
+	printf("MMC: device %d found\n", mmc_dev);
 
 	if (mmc_init(mmc)) {
-		puts("MMC init failed\n");
+		printf("MMCi: device %d init failed\n", mmc_dev);
 		return -1;
 	}
+	printf("MMC: device %d init success\n", mmc_dev);
 
 	blk_start = ALIGN(offset, mmc->read_bl_len) / mmc->read_bl_len;
 	blk_cnt = ALIGN(size, mmc->read_bl_len) / mmc->read_bl_len;
@@ -924,6 +964,12 @@ int board_late_init(void)
 	if (ret)
 		return -1;
 	ret = setup_battery();
+	if (ret)
+		return -1;
+
+        setup_i2c(1, CONFIG_SYS_I2C_SPEED,
+                        0x68, &i2c_pad_info1);
+	ret = setup_tps65185();
 	if (ret)
 		return -1;
 #endif
