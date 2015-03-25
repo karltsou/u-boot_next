@@ -232,11 +232,13 @@ void setup_spinor(void)
 }
 #endif
 
+#define BQ24250_INT  IMX_GPIO_NR(3, 25)
 #define BQ24250_CS   IMX_GPIO_NR(3, 31)
 #define BQ24250_EN1  IMX_GPIO_NR(3, 27)
 #define BQ24250_EN2  IMX_GPIO_NR(3, 29)
 #define WM8962_POWER IMX_GPIO_NR(3, 28)
 #define GSENSOR_INT  IMX_GPIO_NR(4, 5)
+#define CTP_RST      IMX_GPIO_NR(4, 4)
 iomux_v3_cfg_t const mxc_power_pins[] = {
         (MX6_PAD_KEY_ROW0__GPIO_3_25 | MUX_PAD_CTRL(NO_PAD_CTRL)),
         (MX6_PAD_KEY_ROW1__GPIO_3_27 | MUX_PAD_CTRL(NO_PAD_CTRL)),
@@ -244,16 +246,22 @@ iomux_v3_cfg_t const mxc_power_pins[] = {
         (MX6_PAD_KEY_ROW3__GPIO_3_31 | MUX_PAD_CTRL(NO_PAD_CTRL)),
 	(MX6_PAD_KEY_COL2__GPIO_3_28 | MUX_PAD_CTRL(NO_PAD_CTRL)),
 	(MX6_PAD_KEY_ROW6__GPIO_4_5  | MUX_PAD_CTRL(NO_PAD_CTRL)),
+	(MX6_PAD_KEY_COL6__GPIO_4_4  | MUX_PAD_CTRL(NO_PAD_CTRL)),
 };
 static void mxc_board_init_power(void)
 {
 	imx_iomux_v3_setup_multiple_pads(mxc_power_pins,
 			ARRAY_SIZE(mxc_power_pins));
 
+	// pins config as output
 	gpio_direction_output(WM8962_POWER, 1);
 	gpio_direction_output(BQ24250_CS, 1);
 	gpio_direction_output(BQ24250_EN1, 1);
 	gpio_direction_output(BQ24250_EN2, 0);
+	gpio_direction_output(CTP_RST, 1);
+
+	// pins config as input
+	gpio_direction_input(BQ24250_INT);
 	gpio_direction_input(GSENSOR_INT);
 }
 #define BQ24250_ADDRESS  0x6A
@@ -476,8 +484,8 @@ int setup_splash_img(void)
 
 vidinfo_t panel_info = {
 	.vl_refresh = 85,
-	.vl_col = 800,
-	.vl_row = 600,
+	.vl_col = 960,
+	.vl_row = 540,
 	.vl_pixclock = 26666667,
 	.vl_left_margin = 8,
 	.vl_right_margin = 100,
@@ -513,48 +521,22 @@ iomux_v3_cfg_t const mxc_epdc_power_pins[] = {
 };
 static void setup_epdc_power(void)
 {
-	/* uncomment for EPDC hardware change */
-	#if 0
-	/* Setup epdc voltage */
-
-	/* EPDC_PWRSTAT - GPIO2[13] for PWR_GOOD status */
-	imx_iomux_v3_setup_pad(MX6_PAD_EPDC_PWRSTAT__GPIO_2_13 |
-				MUX_PAD_CTRL(EPDC_PAD_CTRL));
-	gpio_direction_input(IMX_GPIO_NR(2, 13));
-
 	/* EPDC_VCOM0 - GPIO2[3] for VCOM control */
-	imx_iomux_v3_setup_pad(MX6_PAD_EPDC_VCOM0__GPIO_2_3 |
-				MUX_PAD_CTRL(EPDC_PAD_CTRL));
-
-	/* Set as output */
-	gpio_direction_output(IMX_GPIO_NR(2, 3), 1);
-
-	/* EPDC_PWRWAKEUP - GPIO2[14] for EPD PMIC WAKEUP */
-	imx_iomux_v3_setup_pad(MX6_PAD_EPDC_PWRWAKEUP__GPIO_2_14 |
-				MUX_PAD_CTRL(EPDC_PAD_CTRL));
-	/* Set as output */
-	gpio_direction_output(IMX_GPIO_NR(2, 14), 1);
-
-	/* EPDC_PWRCTRL0 - GPIO2[7] for EPD PWR CTL0 */
-	imx_iomux_v3_setup_pad(MX6_PAD_EPDC_PWRCTRL0__GPIO_2_7 |
-				MUX_PAD_CTRL(EPDC_PAD_CTRL));
-	/* Set as output */
-	gpio_direction_output(IMX_GPIO_NR(2, 7), 1);
-	#endif
-
-	/* EPDC_ */
-	imx_iomux_v3_setup_multiple_pads(mxc_epdc_power_pins,
-	                        ARRAY_SIZE(mxc_epdc_power_pins));
-        /* Set as output */
-        gpio_direction_output(EPDC_PWR_EN, 1);
-	gpio_direction_output(TPS185WAK, 1);
-
-        /* EPDC_VCOM0 - GPIO2[3] for VCOM control */
         imx_iomux_v3_setup_pad(MX6_PAD_EPDC_VCOM0__GPIO_2_3 |
                                 MUX_PAD_CTRL(EPDC_PAD_CTRL));
 
         /* Set as output */
         gpio_direction_output(IMX_GPIO_NR(2, 3), 1);
+
+	/* EPDC PMIC pins enable */
+	imx_iomux_v3_setup_multiple_pads(mxc_epdc_power_pins,
+	                        ARRAY_SIZE(mxc_epdc_power_pins));
+
+	/* EPD PMIC wakeup */
+	gpio_direction_output(TPS185WAK, 1);
+
+	/* EPD Power Control */
+	gpio_direction_output(EPDC_PWR_EN, 1);
 }
 
 int setup_waveform_file(void)
@@ -574,7 +556,7 @@ int setup_waveform_file(void)
 	printf("MMC: device %d found\n", mmc_dev);
 
 	if (mmc_init(mmc)) {
-		printf("MMCi: device %d init failed\n", mmc_dev);
+		printf("MMC: device %d init failed\n", mmc_dev);
 		return -1;
 	}
 	printf("MMC: device %d init success\n", mmc_dev);
@@ -609,27 +591,6 @@ static void setup_epdc(void)
 {
 	unsigned int reg;
 	struct mxc_ccm_reg *ccm_regs = (struct mxc_ccm_reg *)CCM_BASE_ADDR;
-
-	/*** epdc Maxim PMIC settings ***/
-
-	/* uncomment for EPDC hardware change */
-	#if 0
-	/* EPDC PWRSTAT - GPIO2[13] for PWR_GOOD status */
-	imx_iomux_v3_setup_pad(MX6_PAD_EPDC_PWRSTAT__GPIO_2_13 |
-				MUX_PAD_CTRL(EPDC_PAD_CTRL));
-
-	/* EPDC VCOM0 - GPIO2[3] for VCOM control */
-	imx_iomux_v3_setup_pad(MX6_PAD_EPDC_VCOM0__GPIO_2_3 |
-				MUX_PAD_CTRL(EPDC_PAD_CTRL));
-
-	/* UART4 TXD - GPIO2[14] for EPD PMIC WAKEUP */
-	imx_iomux_v3_setup_pad(MX6_PAD_EPDC_PWRWAKEUP__GPIO_2_14 |
-				MUX_PAD_CTRL(EPDC_PAD_CTRL));
-
-	/* EIM_A18 - GPIO2[7] for EPD PWR CTL0 */
-	imx_iomux_v3_setup_pad(MX6_PAD_EPDC_PWRCTRL0__GPIO_2_7 |
-				MUX_PAD_CTRL(EPDC_PAD_CTRL));
-	#endif
 
 	/*** Set pixel clock rates for EPDC ***/
 
@@ -680,32 +641,10 @@ static void setup_epdc(void)
 
 void epdc_power_on(void)
 {
-	unsigned int reg;
-	struct gpio_regs *gpio_regs = (struct gpio_regs *)GPIO2_BASE_ADDR;
-
-	/* Set EPD_PWR_CTL0 to high - enable EINK_VDD (3.15) */
-	gpio_set_value(IMX_GPIO_NR(2, 7), 1);
 	udelay(1000);
 
 	/* Enable epdc signal pin */
 	epdc_enable_pins();
-
-	/* Set PMIC Wakeup to high - enable Display power */
-	gpio_set_value(IMX_GPIO_NR(2, 14), 1);
-
-	/* Wait for PWRGOOD == 1 */
-	while (1) {
-		reg = readl(&gpio_regs->gpio_psr);
-		if (!(reg & (1 << 13)))
-			break;
-
-		udelay(100);
-	}
-
-	/* Enable VCOM */
-	gpio_set_value(IMX_GPIO_NR(2, 3), 1);
-
-	udelay(500);
 }
 
 void epdc_power_off(void)
