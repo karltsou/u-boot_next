@@ -239,6 +239,8 @@ void setup_spinor(void)
 #define WM8962_POWER IMX_GPIO_NR(3, 28)
 #define GSENSOR_INT  IMX_GPIO_NR(4, 5)
 #define CTP_RST      IMX_GPIO_NR(4, 4)
+#define WC_EN1       IMX_GPIO_NR(3, 24)
+#define WC_EN2       IMX_GPIO_NR(3, 26)
 iomux_v3_cfg_t const mxc_power_pins[] = {
         (MX6_PAD_KEY_ROW0__GPIO_3_25 | MUX_PAD_CTRL(NO_PAD_CTRL)),
         (MX6_PAD_KEY_ROW1__GPIO_3_27 | MUX_PAD_CTRL(NO_PAD_CTRL)),
@@ -247,6 +249,8 @@ iomux_v3_cfg_t const mxc_power_pins[] = {
 	(MX6_PAD_KEY_COL2__GPIO_3_28 | MUX_PAD_CTRL(NO_PAD_CTRL)),
 	(MX6_PAD_KEY_ROW6__GPIO_4_5  | MUX_PAD_CTRL(NO_PAD_CTRL)),
 	(MX6_PAD_KEY_COL6__GPIO_4_4  | MUX_PAD_CTRL(NO_PAD_CTRL)),
+	(MX6_PAD_KEY_COL0__GPIO_3_24 | MUX_PAD_CTRL(NO_PAD_CTRL)),
+	(MX6_PAD_KEY_COL1__GPIO_3_26 | MUX_PAD_CTRL(NO_PAD_CTRL)),
 };
 static void mxc_board_init_power(void)
 {
@@ -259,6 +263,8 @@ static void mxc_board_init_power(void)
 	gpio_direction_output(BQ24250_EN1, 1);
 	gpio_direction_output(BQ24250_EN2, 0);
 	gpio_direction_output(CTP_RST, 1);
+	gpio_direction_output(WC_EN1, 0);
+	gpio_direction_output(WC_EN2, 0);
 
 	// pins config as input
 	gpio_direction_input(BQ24250_INT);
