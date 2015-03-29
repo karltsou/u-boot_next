@@ -286,6 +286,39 @@ static int setup_battery(void)
 	}
 	return 0;
 }
+
+#define TPS185_PUP        IMX_GPIO_NR(4, 3)
+#define TPS185_WAK        IMX_GPIO_NR(1, 26)
+#define TPS185_VCOM_CTRL  IMX_GPIO_NR(2, 3)
+iomux_v3_cfg_t const tps65185_enable_pins[] = {
+        (MX6_PAD_KEY_ROW5__GPIO_4_3 | MUX_PAD_CTRL(NO_PAD_CTRL)),
+        (MX6_PAD_EPDC_SDSHR__GPIO_1_26 | MUX_PAD_CTRL(NO_PAD_CTRL)),
+	(MX6_PAD_EPDC_VCOM0__GPIO_2_3 | MUX_PAD_CTRL(EPDC_PAD_CTRL)),
+};
+static void setup_epdc_power(void)
+{
+        /*  tps65185 pmic pins enable */
+        imx_iomux_v3_setup_multiple_pads(tps65185_enable_pins,
+                                ARRAY_SIZE(tps65185_enable_pins));
+
+	/* tps65185 VCOM_CTRL low */
+        gpio_direction_output(TPS185_VCOM_CTRL, 0);
+
+        /*
+         SLEEP
+         tps65185 enter sleep mode whenever WAKEUP pin is pulled low.
+        */
+        gpio_direction_output(TPS185_WAK, 0);
+        gpio_direction_output(TPS185_PUP, 0);
+
+        udelay(1000);
+        /*
+         STANDBY
+         tps65185 WAKUP pin is pulled high with PWRUP pin low.
+        */
+        gpio_direction_output(TPS185_WAK, 1);
+        gpio_direction_output(TPS185_PUP, 0);
+}
 #define TPS65185_ADDRESS  0x68
 static int setup_tps65185(void)
 {
@@ -293,20 +326,79 @@ static int setup_tps65185(void)
 	unsigned char value = 0;
         i2c_set_bus_num(1);
 
-	value = 0x3f;
-        if (i2c_write(TPS65185_ADDRESS, 0x1, 1, &value, 1)) {
-                printf("Set SW1AB mode error!\n");
-                return -1;
-        }
-
+#if defined (DEBUG)
         if (!i2c_probe(TPS65185_ADDRESS)) {
-                if (i2c_read(TPS65185_ADDRESS, 1, 1, &status, 1)) {
+                if (i2c_read(TPS65185_ADDRESS, 0x1, 1, &status, 1)) {
                         printf("TPS: register 0x01h read error!\n");
                         return -1;
                 }
-                printf("TPS: register 0x01h-0x%x\n",status);
+                printf("TPS: ENABLE 0x01h-0x%x\n",status);
         }
 
+	if (!i2c_probe(TPS65185_ADDRESS)) {
+                if (i2c_read(TPS65185_ADDRESS, 0x10, 1, &status, 1)) {
+                        printf("TPS: REVID 0x10h read error!\n");
+                        return -1;
+                }
+                printf("TPS: REVID 0x%x\n", status);
+        }
+#endif
+	/*
+	 VCOM CTRL
+	 VCOM enable. Pull thie pin high to enalbe the VCOM amplifier.
+	*/
+	gpio_direction_output(TPS185_VCOM_CTRL, 1);
+	/*
+	 VCOM1
+	 VCOM[7:0] 200 x -10mv = -2v
+	*/
+	value = 0xc8;
+        if (i2c_write(TPS65185_ADDRESS, 0x3, 1, &value, 1)) {
+                printf("Set VOM1 error!\n");
+                return -1;
+        }
+	/*
+         Power-Up Sequence register 1
+	 DLY4 delay time set 00 - 3ms
+	 DLY3 delay time set 00 - 3ms
+	 DLY2 delay time set 00 - 3ms
+	 DLY1 delay time set 00 - 3ms
+        */
+        value = 0x00;
+        if (i2c_write(TPS65185_ADDRESS, 0xa, 1, &value, 1)) {
+                printf("Set UPSEQ1 error!\n");
+                return -1;
+        }
+	/*
+	 ENABLE
+	 Set the ACTIVE bit in the ENABLE register to "1" to execute
+	 the power-up sequence and bring up all power rails.
+	*/
+        value = 0xbf;
+        if (i2c_write(TPS65185_ADDRESS, 0x1, 1, &value, 1)) {
+                printf("Set ENABLE error!\n");
+                return -1;
+        }
+	/*
+	 Alternative pull the PWRUP pin high (rising edge)
+	gpio_direction_output(TPS185_PUP, 1);
+	*/
+
+	udelay(2000);
+	/*
+	 POWER GOOD STATUS
+	 VDDH_EN VDDH charge pump enable
+	 VPOS_EN VPOS LDO charge regulator enable
+	 VEE_EN  VEE charge pump enable
+	 VNEG_EN VNEG LDO regulator enable
+	*/
+	if (!i2c_probe(TPS65185_ADDRESS)) {
+                if (i2c_read(TPS65185_ADDRESS, 0xf, 1, &status, 1)) {
+                        printf("TPS: reg 0xfh read error!\n");
+                        return -1;
+                }
+                printf("TPS: POWER GOOD STATUS 0x0fh-0x%x\n",status);
+        }
         return 0;
 }
 #ifdef CONFIG_FSL_ESDHC
@@ -486,13 +578,13 @@ vidinfo_t panel_info = {
 	.vl_refresh = 85,
 	.vl_col = 960,
 	.vl_row = 540,
-	.vl_pixclock = 26666667,
+	.vl_pixclock = 25000000,
 	.vl_left_margin = 8,
-	.vl_right_margin = 100,
+	.vl_right_margin = 32,
 	.vl_upper_margin = 4,
-	.vl_lower_margin = 8,
-	.vl_hsync = 4,
-	.vl_vsync = 1,
+	.vl_lower_margin = 9,
+	.vl_hsync = 10,
+	.vl_vsync = 2,
 	.vl_sync = 0,
 	.vl_mode = 0,
 	.vl_flag = 0,
@@ -506,38 +598,12 @@ struct epdc_timing_params panel_timings = {
 	.sdoed_delay = 20,
 	.sdoez_width = 10,
 	.sdoez_delay = 20,
-	.gdclk_hp_offs = 419,
-	.gdsp_offs = 20,
+	.gdclk_hp_offs = 436,
+	.gdsp_offs = 342,
 	.gdoe_offs = 0,
-	.gdclk_offs = 5,
+	.gdclk_offs = 75,
 	.num_ce = 1,
 };
-
-#define EPDC_PWR_EN  IMX_GPIO_NR(4, 3)
-#define TPS185WAK    IMX_GPIO_NR(1, 26)
-iomux_v3_cfg_t const mxc_epdc_power_pins[] = {
-        (MX6_PAD_KEY_ROW5__GPIO_4_3 | MUX_PAD_CTRL(NO_PAD_CTRL)),
-	(MX6_PAD_EPDC_SDSHR__GPIO_1_26 | MUX_PAD_CTRL(NO_PAD_CTRL)),
-};
-static void setup_epdc_power(void)
-{
-	/* EPDC_VCOM0 - GPIO2[3] for VCOM control */
-        imx_iomux_v3_setup_pad(MX6_PAD_EPDC_VCOM0__GPIO_2_3 |
-                                MUX_PAD_CTRL(EPDC_PAD_CTRL));
-
-        /* Set as output */
-        gpio_direction_output(IMX_GPIO_NR(2, 3), 1);
-
-	/* EPDC PMIC pins enable */
-	imx_iomux_v3_setup_multiple_pads(mxc_epdc_power_pins,
-	                        ARRAY_SIZE(mxc_epdc_power_pins));
-
-	/* EPD PMIC wakeup */
-	gpio_direction_output(TPS185WAK, 1);
-
-	/* EPD Power Control */
-	gpio_direction_output(EPDC_PWR_EN, 1);
-}
 
 int setup_waveform_file(void)
 {
@@ -578,6 +644,7 @@ static void epdc_enable_pins(void)
 	/* epdc iomux settings */
 	imx_iomux_v3_setup_multiple_pads(epdc_enable_pads,
 				ARRAY_SIZE(epdc_enable_pads));
+
 }
 
 static void epdc_disable_pins(void)
@@ -641,6 +708,10 @@ static void setup_epdc(void)
 
 void epdc_power_on(void)
 {
+	setup_i2c(1, CONFIG_SYS_I2C_SPEED,
+                        0x68, &i2c_pad_info1);
+        setup_tps65185();
+
 	udelay(1000);
 
 	/* Enable epdc signal pin */
@@ -903,12 +974,6 @@ int board_late_init(void)
 	if (ret)
 		return -1;
 	ret = setup_battery();
-	if (ret)
-		return -1;
-
-        setup_i2c(1, CONFIG_SYS_I2C_SPEED,
-                        0x68, &i2c_pad_info1);
-	ret = setup_tps65185();
 	if (ret)
 		return -1;
 #endif
