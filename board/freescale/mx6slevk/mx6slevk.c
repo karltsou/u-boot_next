@@ -5,7 +5,7 @@
  *
  * SPDX-License-Identifier:	GPL-2.0+
  */
-
+#define DEBUG
 #include <asm/arch/clock.h>
 #include <asm/arch/iomux.h>
 #include <asm/arch/imx-regs.h>
@@ -332,28 +332,6 @@ static int setup_tps65185(void)
 	unsigned char value = 0;
         i2c_set_bus_num(1);
 
-#if defined (DEBUG)
-        if (!i2c_probe(TPS65185_ADDRESS)) {
-                if (i2c_read(TPS65185_ADDRESS, 0x1, 1, &status, 1)) {
-                        printf("TPS: register 0x01h read error!\n");
-                        return -1;
-                }
-                printf("TPS: ENABLE 0x01h-0x%x\n",status);
-        }
-
-	if (!i2c_probe(TPS65185_ADDRESS)) {
-                if (i2c_read(TPS65185_ADDRESS, 0x10, 1, &status, 1)) {
-                        printf("TPS: REVID 0x10h read error!\n");
-                        return -1;
-                }
-                printf("TPS: REVID 0x%x\n", status);
-        }
-#endif
-	/*
-	 VCOM CTRL
-	 VCOM enable. Pull thie pin high to enalbe the VCOM amplifier.
-	*/
-	gpio_direction_output(TPS185_VCOM_CTRL, 1);
 	/*
 	 VCOM1
 	 VCOM[7:0] 200 x -10mv = -2v
@@ -380,17 +358,24 @@ static int setup_tps65185(void)
 	 Set the ACTIVE bit in the ENABLE register to "1" to execute
 	 the power-up sequence and bring up all power rails.
 	*/
-        value = 0xbf;
+        value = 0x3f;
         if (i2c_write(TPS65185_ADDRESS, 0x1, 1, &value, 1)) {
                 printf("Set ENABLE error!\n");
                 return -1;
         }
 	/*
 	 Alternative pull the PWRUP pin high (rising edge)
-	gpio_direction_output(TPS185_PUP, 1);
 	*/
+	gpio_direction_output(TPS185_PUP, 1);
 
-	udelay(2000);
+	udelay(10000);
+	/*
+         VCOM CTRL
+         VCOM enable. Pull thie pin high to enalbe the VCOM amplifier.
+        */
+        gpio_direction_output(TPS185_VCOM_CTRL, 1);
+
+	udelay(100000);
 	/*
 	 POWER GOOD STATUS
 	 VDDH_EN VDDH charge pump enable
@@ -405,6 +390,39 @@ static int setup_tps65185(void)
                 }
                 printf("TPS: POWER GOOD STATUS 0x0fh-0x%x\n",status);
         }
+#if defined (DEBUG)
+        if (!i2c_probe(TPS65185_ADDRESS)) {
+                if (i2c_read(TPS65185_ADDRESS, 0x1, 1, &status, 1)) {
+                        printf("TPS: register 0x01h read error!\n");
+                        return -1;
+                }
+                printf("TPS: ENABLE 0x01h-0x%x\n",status);
+        }
+
+	if (!i2c_probe(TPS65185_ADDRESS)) {
+                if (i2c_read(TPS65185_ADDRESS, 0x9, 1, &status, 1)) {
+                        printf("TPS: register 0x09h read error!\n");
+                        return -1;
+                }
+                printf("TPS: UPSEQ0 0x09h-0x%x\n",status);
+        }
+
+	if (!i2c_probe(TPS65185_ADDRESS)) {
+                if (i2c_read(TPS65185_ADDRESS, 0xa, 1, &status, 1)) {
+                        printf("TPS: register 0x0ah read error!\n");
+                        return -1;
+                }
+                printf("TPS: UPSEQ1 0x0ah-0x%x\n",status);
+        }
+
+        if (!i2c_probe(TPS65185_ADDRESS)) {
+                if (i2c_read(TPS65185_ADDRESS, 0x10, 1, &status, 1)) {
+                        printf("TPS: REVID 0x10h read error!\n");
+                        return -1;
+                }
+                printf("TPS: REVID 0x%x\n", status);
+        }
+#endif
         return 0;
 }
 #ifdef CONFIG_FSL_ESDHC
