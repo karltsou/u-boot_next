@@ -59,6 +59,11 @@
 #include <fastboot.h>
 #endif
 
+#if defined(CONFIG_SPLASH_SCREEN) &&    \
+        (defined(CONFIG_VIDEO_MX5) || defined(CONFIG_MXC_EPDC))
+extern void setup_splash_image(void);
+#endif
+
 DECLARE_GLOBAL_DATA_PTR;
 
 ulong monitor_flash_len;
@@ -859,6 +864,10 @@ init_fnc_t init_sequence_r[] = {
 	 * Do pci configuration
 	 */
 	initr_pci,
+#endif
+#if defined(CONFIG_SPLASH_SCREEN) &&    \
+        (defined(CONFIG_VIDEO_MX5)||defined(CONFIG_MXC_EPDC))
+        setup_splash_image,
 #endif
 	stdio_init,
 	initr_jumptable,

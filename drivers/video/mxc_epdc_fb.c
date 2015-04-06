@@ -7,7 +7,7 @@
  * Based on STMP378X LCDIF
  * Copyright 2008 Embedded Alley Solutions, Inc All Rights Reserved.
  */
-
+#define DEBUG
 #include <common.h>
 #include <lcd.h>
 #include <linux/list.h>
@@ -37,6 +37,7 @@ void lcd_setcolreg(ushort regno, ushort red, ushort green, ushort blue)
 {
 }
 
+extern void setup_epdc(void);
 #define TEMP_USE_DEFAULT 8
 
 #define UPDATE_MODE_PARTIAL			0x0
@@ -154,7 +155,11 @@ static void epdc_init_settings(void)
 
 	/* EPDC_FORMAT - 2bit TFT and 4bit Buf pixel format */
 	reg_val = EPDC_FORMAT_TFT_PIXEL_FORMAT_2BIT
+#if !defined(CONFIG_WAVEFORM_GEN2)
 		| EPDC_FORMAT_BUF_PIXEL_FORMAT_P4N
+#else
+		| panel_info.epdc_data.buf_pix_fmt
+#endif
 		| ((0x0 << EPDC_FORMAT_DEFAULT_TFT_PIXEL_OFFSET) &
 		EPDC_FORMAT_DEFAULT_TFT_PIXEL_MASK);
 	REG_WR(EPDC_BASE, EPDC_FORMAT, reg_val);
@@ -259,7 +264,11 @@ static void epdc_init_settings(void)
 	reg_val = EPDC_TCE_SDCFG_SDCLK_HOLD | EPDC_TCE_SDCFG_SDSHR
 		| ((num_ce << EPDC_TCE_SDCFG_NUM_CE_OFFSET) & EPDC_TCE_SDCFG_NUM_CE_MASK)
 		| EPDC_TCE_SDCFG_SDDO_REFORMAT_FLIP_PIXELS
+#if !defined(CONFIG_WAVEFORM_GEN2)
 		| ((panel_info.vl_col << EPDC_TCE_SDCFG_PIXELS_PER_CE_OFFSET) &
+#else
+		| ((panel_info.vl_col/num_ce << EPDC_TCE_SDCFG_PIXELS_PER_CE_OFFSET) &
+#endif
 		EPDC_TCE_SDCFG_PIXELS_PER_CE_MASK);
 	REG_WR(EPDC_BASE, EPDC_TCE_SDCFG, reg_val);
 
@@ -314,7 +323,7 @@ static void draw_mode0(void)
 
 	/* Will timeout after ~4-5 seconds */
 
-	for (i = 0; i < 40; i++) {
+	for (i = 0; i < 100; i++) {
 		if (!epdc_is_lut_active(0)) {
 			debug("Mode0 init complete\n");
 			return;
@@ -323,7 +332,6 @@ static void draw_mode0(void)
 	}
 
 	debug("Mode0 init failed!\n");
-
 }
 
 static void draw_splash_screen(void)
@@ -337,7 +345,7 @@ static void draw_splash_screen(void)
 	epdc_submit_update(lut_num, panel_info.epdc_data.wv_modes.mode_gc16,
 		UPDATE_MODE_FULL, FALSE, 0);
 
-	for (i = 0; i < 40; i++) {
+	for (i = 0; i < 100; i++) {
 		if (!epdc_is_lut_active(lut_num)) {
 			debug("Splash screen update complete\n");
 			return;
@@ -349,27 +357,12 @@ static void draw_splash_screen(void)
 
 void lcd_enable(void)
 {
-	int i;
-
 	epdc_power_on();
-
-	lcd_base = (void *)CONFIG_FB_BASE;
-	/* Draw black border around framebuffer*/
-	memset(lcd_base, 0xFF, panel_info.vl_col * panel_info.vl_row);
-	memset(lcd_base, 0x0, 24 * panel_info.vl_col);
-	for (i = 24; i < (panel_info.vl_row - 24); i++) {
-		memset((u8 *)lcd_base + i * panel_info.vl_col, 0x00, 24);
-		memset((u8 *)lcd_base + i * panel_info.vl_col
-			+ panel_info.vl_col - 24, 0x00, 24);
-	}
-	memset((u8 *)lcd_base + panel_info.vl_col * (panel_info.vl_row - 24),
-		0x00, 24 * panel_info.vl_col);
-
-	flush_cache((ulong)lcd_base, panel_info.vl_col * panel_info.vl_row);
 
 	/* Draw data to display */
 	draw_mode0();
 
+	/* Draw splash screen to display */
 	draw_splash_screen();
 }
 
@@ -400,6 +393,15 @@ void lcd_ctrl_init(void *lcdbase)
 	lcd_color_fg = 0xFF;
 	lcd_color_bg = 0xFF;
 
+	/* Get waveform data address and offset */
+	if (setup_waveform_file()) {
+		printf("Can't load waveform data!\n");
+		return;
+	}
+	printf("Load waveform data success\n");
+
+	setup_epdc();
+
 	/* Reset */
 	REG_SET(EPDC_BASE, EPDC_CTRL, EPDC_CTRL_SFTRST);
 	while (!(REG_RD(EPDC_BASE, EPDC_CTRL) & EPDC_CTRL_CLKGATE))
@@ -422,6 +424,8 @@ void lcd_ctrl_init(void *lcdbase)
 			+ ((val & EPDC_VERSION_MINOR_MASK) >>
 				EPDC_VERSION_MINOR_OFFSET);
 
+	debug(" framebuffer pointer 0x%x\n", (u32)lcdbase);
+
 	/* Set framebuffer pointer */
 	REG_WR(EPDC_BASE, EPDC_UPD_ADDR, (u32)lcdbase);
 
@@ -429,12 +433,6 @@ void lcd_ctrl_init(void *lcdbase)
 	REG_WR(EPDC_BASE, EPDC_WB_ADDR, panel_info.epdc_data.working_buf_addr);
 	if (rev > 20)
 		REG_WR(EPDC_BASE, EPDC_WB_ADDR_TCE, panel_info.epdc_data.working_buf_addr);
-
-	/* Get waveform data address and offset */
-	if (setup_waveform_file()) {
-		printf("Can't load waveform data!\n");
-		return;
-	}
 
 	/* Set Waveform Buffer pointer */
 	REG_WR(EPDC_BASE, EPDC_WVADDR,

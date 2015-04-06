@@ -5,7 +5,7 @@
  *
  * SPDX-License-Identifier:	GPL-2.0+
  */
-#define DEBUG
+
 #include <asm/arch/clock.h>
 #include <asm/arch/iomux.h>
 #include <asm/arch/imx-regs.h>
@@ -259,10 +259,14 @@ static void mxc_board_init_power(void)
 
 	// pins config as output
 	gpio_direction_output(WM8962_POWER, 1);
-	gpio_direction_output(BQ24250_CS, 1);
+	// BAT bq24250 CS pin active low enable battery charge
+	// BAT bq24250 {EN2,EN1} pins {0,1} externally programmed by ILIM up to 2.0A
+	gpio_direction_output(BQ24250_CS, 0);
 	gpio_direction_output(BQ24250_EN1, 1);
 	gpio_direction_output(BQ24250_EN2, 0);
+	// Touch reset pin output high
 	gpio_direction_output(CTP_RST, 1);
+	// Wireless charge disable
 	gpio_direction_output(WC_EN1, 0);
 	gpio_direction_output(WC_EN2, 0);
 
@@ -368,14 +372,7 @@ static int setup_tps65185(void)
 	*/
 	gpio_direction_output(TPS185_PUP, 1);
 
-	udelay(10000);
-	/*
-         VCOM CTRL
-         VCOM enable. Pull thie pin high to enalbe the VCOM amplifier.
-        */
-        gpio_direction_output(TPS185_VCOM_CTRL, 1);
-
-	udelay(100000);
+	udelay(50000);
 	/*
 	 POWER GOOD STATUS
 	 VDDH_EN VDDH charge pump enable
@@ -437,6 +434,9 @@ static struct fsl_esdhc_cfg usdhc_cfg[3] = {
 
 int mmc_get_env_devno(void)
 {
+#if 1
+	return 0;
+#else
 	u32 soc_sbmr = readl(SRC_BASE_ADDR + 0x4);
 	u32 dev_no;
 	u32 bootsel;
@@ -451,6 +451,7 @@ int mmc_get_env_devno(void)
 	dev_no = (soc_sbmr & 0x00001800) >> 11;
 
 	return dev_no;
+#endif
 }
 
 int mmc_map_to_kernel_blk(int dev_no)
@@ -556,7 +557,7 @@ void board_late_mmc_env_init(void)
 #ifdef CONFIG_MXC_EPDC
 #ifdef CONFIG_SPLASH_SCREEN
 extern int mmc_get_env_devno(void);
-int setup_splash_img(void)
+int setup_splash_image(void)
 {
 #ifdef CONFIG_SPLASH_IS_IN_MMC
 	int mmc_dev = mmc_get_env_devno();
@@ -568,12 +569,7 @@ int setup_splash_img(void)
 	uint blk_start, blk_cnt, n;
 
 	s = getenv("splashimage");
-
-	if (NULL == s) {
-		puts("env splashimage not found!\n");
-		return -1;
-	}
-	addr = simple_strtoul(s, NULL, 16);
+	addr = (s == NULL) ?CONFIG_LOADADDR :simple_strtoul(s, NULL, 16);
 
 	if (!mmc) {
 		printf("MMC Device %d not found\n", mmc_dev);
@@ -591,6 +587,7 @@ int setup_splash_img(void)
 				      blk_cnt, (u_char *)addr);
 	flush_cache((ulong)addr, blk_cnt * mmc->read_bl_len);
 
+	printf("splash: Number of blocks read %d - start blk %d n %d\n", n, blk_start, blk_cnt);
 	return (n == blk_cnt) ? 0 : -1;
 #endif
 
@@ -598,6 +595,7 @@ int setup_splash_img(void)
 }
 #endif
 
+short lcd_cmap[256];
 vidinfo_t panel_info = {
 	.vl_refresh = 85,
 	.vl_col = 960,
@@ -613,7 +611,7 @@ vidinfo_t panel_info = {
 	.vl_mode = 0,
 	.vl_flag = 0,
 	.vl_bpix = 3,
-	.cmap = 0,
+	.cmap = (void *)lcd_cmap,
 };
 
 struct epdc_timing_params panel_timings = {
@@ -629,6 +627,38 @@ struct epdc_timing_params panel_timings = {
 	.num_ce = 1,
 };
 
+struct waveform_data_header {
+	unsigned int wi0;
+	unsigned int wi1;
+	unsigned int wi2;
+	unsigned int wi3;
+	unsigned int wi4;
+	unsigned int wi5;
+	unsigned int wi6;
+	unsigned int xwia:24;
+	unsigned int cs1:8;
+	unsigned int wmta:24;
+	unsigned int fvsn:8;
+	unsigned int luts:8;
+	unsigned int mc:8;
+	unsigned int trc:8;
+	unsigned int reserved0_0:8;
+	unsigned int eb:8;
+	unsigned int sb:8;
+	unsigned int reserved0_1:8;
+	unsigned int reserved0_2:8;
+	unsigned int reserved0_3:8;
+	unsigned int reserved0_4:8;
+	unsigned int reserved0_5:8;
+	unsigned int cs2:8;
+};
+
+#define        EPDC_FORMAT_BUF_PIXEL_FORMAT_P4N 0x400
+#define        EPDC_FORMAT_BUF_PIXEL_FORMAT_P5N 0x500
+struct mxcfb_waveform_data_file {
+	struct waveform_data_header wdh;
+	u32 *data;  /* Temperature Range Table + Waveform Data */
+};
 int setup_waveform_file(void)
 {
 #ifdef CONFIG_WAVEFORM_FILE_IN_MMC
@@ -638,6 +668,8 @@ int setup_waveform_file(void)
 	ulong addr = CONFIG_WAVEFORM_BUF_ADDR;
 	struct mmc *mmc = find_mmc_device(mmc_dev);
 	uint blk_start, blk_cnt, n;
+	struct mxcfb_waveform_data_file *wv_file;
+	int wv_data_offs;
 
 	if (!mmc) {
 		printf("MMC: device %d not found\n", mmc_dev);
@@ -657,7 +689,26 @@ int setup_waveform_file(void)
 				      blk_cnt, (u_char *)addr);
 	flush_cache((ulong)addr, blk_cnt * mmc->read_bl_len);
 
-	return (n == blk_cnt) ? 0 : -1;
+	if(n != blk_cnt) {
+		printf("MMC attempts to read %d blocks but only %d blocks is read\n",
+			blk_cnt, n);
+		return -1;
+	}
+	wv_file = (struct mxcfb_waveform_data_file *)CONFIG_WAVEFORM_BUF_ADDR;
+#if defined(CONFIG_WAVEFORM_GEN2)
+	if((wv_file->wdh.luts & 0xC) == 0x4)
+		panel_info.epdc_data.buf_pix_fmt = EPDC_FORMAT_BUF_PIXEL_FORMAT_P5N;
+	else
+		panel_info.epdc_data.buf_pix_fmt = EPDC_FORMAT_BUF_PIXEL_FORMAT_P4N;
+#endif
+	wv_data_offs = sizeof(wv_file->wdh) + (wv_file->wdh.trc + 1) + 1;
+
+	memcpy((void *)CONFIG_WAVEFORM_BUF_ADDR,
+		(void *)(CONFIG_WAVEFORM_BUF_ADDR + wv_data_offs),
+		(CONFIG_WAVEFORM_FILE_SIZE - wv_data_offs));
+	flush_cache((ulong)CONFIG_WAVEFORM_BUF_ADDR, CONFIG_WAVEFORM_FILE_SIZE);
+
+	return 0;
 #else
 	return -1;
 #endif
@@ -678,7 +729,7 @@ static void epdc_disable_pins(void)
 				ARRAY_SIZE(epdc_disable_pads));
 }
 
-static void setup_epdc(void)
+void setup_epdc(void)
 {
 	unsigned int reg;
 	struct mxc_ccm_reg *ccm_regs = (struct mxc_ccm_reg *)CCM_BASE_ADDR;
@@ -736,24 +787,26 @@ void epdc_power_on(void)
                         0x68, &i2c_pad_info1);
         setup_tps65185();
 
-	udelay(1000);
-
 	/* Enable epdc signal pin */
 	epdc_enable_pins();
+	udelay(1000);
+
+	/* Enable VCOM */
+	gpio_direction_output(TPS185_VCOM_CTRL, 1);
 }
 
 void epdc_power_off(void)
 {
-	/* Set PMIC Wakeup to low - disable Display power */
-	gpio_set_value(IMX_GPIO_NR(2, 14), 0);
+	int ii;
 
 	/* Disable VCOM */
 	gpio_set_value(IMX_GPIO_NR(2, 3), 0);
+	/* 50ms delay */
+	for(ii=0; ii<100; ii++)
+		udelay(500);
 
 	epdc_disable_pins();
 
-	/* Set EPD_PWR_CTL0 to low - disable EINK_VDD (3.15) */
-	gpio_set_value(IMX_GPIO_NR(2, 7), 0);
 }
 #endif
 
@@ -981,9 +1034,6 @@ int board_init(void)
 	setup_fec();
 #endif
 
-#ifdef	CONFIG_MXC_EPDC
-	setup_epdc();
-#endif
 	return 0;
 }
 

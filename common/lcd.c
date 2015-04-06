@@ -12,7 +12,7 @@
 /************************************************************************/
 
 /* #define DEBUG */
-
+#define DEBUG
 #include <config.h>
 #include <common.h>
 #include <command.h>
@@ -501,17 +501,6 @@ static int lcd_init(void *lcdbase)
 
 	lcd_ctrl_init(lcdbase);
 
-	/*
-	 * lcd_ctrl_init() of some drivers (i.e. bcm2835 on rpi_b) ignores
-	 * the 'lcdbase' argument and uses custom lcd base address
-	 * by setting up gd->fb_base. Check for this condition and fixup
-	 * 'lcd_base' address.
-	 */
-	if (map_to_sysmem(lcdbase) != gd->fb_base)
-		lcd_base = map_sysmem(gd->fb_base, 0);
-
-	debug("[LCD] Using LCD frambuffer at %p\n", lcd_base);
-
 	lcd_get_size(&lcd_line_length);
 	lcd_is_enabled = 1;
 	lcd_clear();
@@ -905,6 +894,9 @@ int lcd_display_bitmap(ulong bmp_image, int x, int y)
 	unsigned long width, height, byte_width;
 	unsigned long pwidth = panel_info.vl_col;
 	unsigned colors, bpix, bmp_bpix;
+#ifdef CONFIG_LCD_BMP_RLE8
+	u32 compression;
+#endif
 
 	if (!bmp || !(bmp->header.signature[0] == 'B' &&
 		bmp->header.signature[1] == 'M')) {
@@ -1006,7 +998,7 @@ int lcd_display_bitmap(ulong bmp_image, int x, int y)
 	case 1: /* pass through */
 	case 8:
 #ifdef CONFIG_LCD_BMP_RLE8
-		u32 compression = get_unaligned_le32(&bmp->header.compression);
+		compression = get_unaligned_le32(&bmp->header.compression);
 		if (compression == BMP_BI_RLE8) {
 			if (bpix != 16) {
 				/* TODO implement render code for bpix != 16 */
@@ -1080,14 +1072,15 @@ static void *lcd_logo(void)
 	ulong addr;
 	static int do_splash = 1;
 
-	if (do_splash && (s = getenv("splashimage")) != NULL) {
+	s = getenv("splashimage");
+        addr = (s == NULL) ?CONFIG_LOADADDR :simple_strtoul(s, NULL, 16);
+
+	if (do_splash) {
 		int x = 0, y = 0;
 		do_splash = 0;
 
 		if (splash_screen_prepare())
 			return (void *)lcd_base;
-
-		addr = simple_strtoul (s, NULL, 16);
 
 		splash_get_pos(&x, &y);
 
