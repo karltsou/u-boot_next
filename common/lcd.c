@@ -763,7 +763,7 @@ int lcd_display_bitmap(ulong bmp_image, int x, int y)
 			WATCHDOG_RESET();
 			for (j = 0; j < width; j++) {
 				if (bpix != 16) {
-#if defined(CONFIG_PXA250) || defined(CONFIG_ATMEL_LCD)
+#if defined(CONFIG_PXA250) || defined(CONFIG_ATMEL_LCD) || defined(CONFIG_MXC_EPDC)
 					*(fb++) = *(bmap++);
 #elif defined(CONFIG_MPC823) || defined(CONFIG_MCC200)
 					*(fb++) = 255 - *(bmap++);
@@ -836,11 +836,12 @@ static void *lcd_logo (void)
 	ulong addr;
 	static int do_splash = 1;
 
-	if (do_splash && (s = getenv("splashimage")) != NULL) {
+	if (do_splash) {
 		int x = 0, y = 0;
 		do_splash = 0;
 
-		addr = simple_strtoul (s, NULL, 16);
+		s = getenv("splashimage");
+		addr = (s == NULL) ?CONFIG_LOADADDR :simple_strtoul(s, NULL, 16);
 
 #ifdef CONFIG_SPLASH_SCREEN_ALIGN
 		if ((s = getenv ("splashpos")) != NULL) {

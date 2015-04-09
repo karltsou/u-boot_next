@@ -72,7 +72,8 @@ extern int  AT91F_DataflashInit(void);
 extern void dataflash_print_info(void);
 #endif
 
-#if defined CONFIG_SPLASH_SCREEN && defined CONFIG_VIDEO_MX5
+#if defined(CONFIG_SPLASH_SCREEN) && 	\
+	(defined(CONFIG_VIDEO_MX5) || defined(CONFIG_MXC_EPDC))
 extern void setup_splash_image(void);
 #endif
 
@@ -404,7 +405,8 @@ void start_armboot (void)
 	/* IP Address */
 	gd->bd->bi_ip_addr = getenv_IPaddr ("ipaddr");
 
-#if defined CONFIG_SPLASH_SCREEN && defined CONFIG_VIDEO_MX5
+#if defined(CONFIG_SPLASH_SCREEN) && 	\
+	(defined(CONFIG_VIDEO_MX5)||defined(CONFIG_MXC_EPDC))
 	setup_splash_image();
 #endif
 

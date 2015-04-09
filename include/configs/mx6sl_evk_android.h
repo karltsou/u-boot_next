@@ -53,7 +53,7 @@
 #define CONFIG_VOL_DOWN_KEY     KEY_BACK
 #define CONFIG_POWER_KEY        KEY_5
 
-#define CONFIG_MXC_KPD
+/* #define CONFIG_MXC_KPD */
 #define CONFIG_MXC_KEYMAPPING \
 	{       \
 		KEY_SELECT, KEY_BACK, KEY_1,     KEY_2, \

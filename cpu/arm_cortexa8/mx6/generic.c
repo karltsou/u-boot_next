@@ -1619,9 +1619,13 @@ void get_board_serial(struct tag_serialnr *serialnr)
 #ifdef CONFIG_DYNAMIC_MMC_DEVNO
 int get_mmc_env_devno(void)
 {
+#if 1
+	return 0;
+#else
 	uint soc_sbmr = readl(SRC_BASE_ADDR + 0x4);
 
 	/* BOOT_CFG2[3] and BOOT_CFG2[4] */
 	return (soc_sbmr & 0x00001800) >> 11;
+#endif
 }
 #endif

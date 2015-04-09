@@ -70,6 +70,12 @@ static enum boot_device boot_dev;
 #define USB_H1_PWR IMX_GPIO_NR(4, 2)
 #define GPIO_POWER_KEY IMX_GPIO_NR(3, 18)
 
+#define EPDC_PAD_CTRL    (PAD_CTL_PKE | PAD_CTL_SPEED_MED |     \
+        PAD_CTL_DSE_40ohm | PAD_CTL_HYS)
+
+int get_mmc_env_devno(void);
+int i2c_bus_recovery(void);
+static void setup_i2c(unsigned int module_base);
 
 static inline void setup_boot_device(void)
 {
@@ -159,17 +165,13 @@ struct fsl_esdhc_cfg usdhc_cfg[3] = {
 };
 
 iomux_v3_cfg_t usdhc1_pads[] = {
-	/* 8 bit SD */
+	/* 4-bit SD */
 	MX6SL_PAD_SD1_CLK__USDHC1_CLK,
 	MX6SL_PAD_SD1_CMD__USDHC1_CMD,
 	MX6SL_PAD_SD1_DAT0__USDHC1_DAT0,
 	MX6SL_PAD_SD1_DAT1__USDHC1_DAT1,
 	MX6SL_PAD_SD1_DAT2__USDHC1_DAT2,
 	MX6SL_PAD_SD1_DAT3__USDHC1_DAT3,
-	MX6SL_PAD_SD1_DAT4__USDHC1_DAT4,
-	MX6SL_PAD_SD1_DAT5__USDHC1_DAT5,
-	MX6SL_PAD_SD1_DAT6__USDHC1_DAT6,
-	MX6SL_PAD_SD1_DAT7__USDHC1_DAT7,
 };
 
 iomux_v3_cfg_t usdhc2_pads[] = {
@@ -180,6 +182,10 @@ iomux_v3_cfg_t usdhc2_pads[] = {
 	MX6SL_PAD_SD2_DAT1__USDHC2_DAT1,
 	MX6SL_PAD_SD2_DAT2__USDHC2_DAT2,
 	MX6SL_PAD_SD2_DAT3__USDHC2_DAT3,
+	MX6SL_PAD_SD2_DAT4__USDHC2_DAT4,
+	MX6SL_PAD_SD2_DAT5__USDHC2_DAT5,
+	MX6SL_PAD_SD2_DAT6__USDHC2_DAT6,
+	MX6SL_PAD_SD2_DAT7__USDHC2_DAT7,
 };
 
 iomux_v3_cfg_t usdhc3_pads[] = {
@@ -291,7 +297,7 @@ int board_mmc_init(bd_t *bis)
 
 #ifdef CONFIG_MXC_EPDC
 #ifdef CONFIG_SPLASH_SCREEN
-int setup_splash_img(void)
+int setup_splash_image(void)
 {
 #ifdef CONFIG_SPLASH_IS_IN_MMC
 	int mmc_dev = get_mmc_env_devno();
@@ -303,12 +309,7 @@ int setup_splash_img(void)
 	uint blk_start, blk_cnt, n;
 
 	s = getenv("splashimage");
-
-	if (NULL == s) {
-		puts("env splashimage not found!\n");
-		return -1;
-	}
-	addr = simple_strtoul(s, NULL, 16);
+	addr = (s == NULL) ?CONFIG_LOADADDR :simple_strtoul(s, NULL, 16);
 
 	if (!mmc) {
 		printf("MMC Device %d not found\n", mmc_dev);
@@ -333,22 +334,24 @@ int setup_splash_img(void)
 }
 #endif
 
+short lcd_cmap[256];
+
 vidinfo_t panel_info = {
 	.vl_refresh = 85,
-	.vl_col = 800,
-	.vl_row = 600,
-	.vl_pixclock = 26666667,
+	.vl_col = 960,
+	.vl_row = 540,
+	.vl_pixclock = 25000000,
 	.vl_left_margin = 8,
-	.vl_right_margin = 100,
+	.vl_right_margin = 32,
 	.vl_upper_margin = 4,
-	.vl_lower_margin = 8,
-	.vl_hsync = 4,
-	.vl_vsync = 1,
+	.vl_lower_margin = 9,
+	.vl_hsync = 10,
+	.vl_vsync = 2,
 	.vl_sync = 0,
 	.vl_mode = 0,
 	.vl_flag = 0,
 	.vl_bpix = 3,
-	.cmap = 0,
+	.cmap = (void *)lcd_cmap,
 };
 
 struct epdc_timing_params panel_timings = {
@@ -357,44 +360,77 @@ struct epdc_timing_params panel_timings = {
 	.sdoed_delay = 20,
 	.sdoez_width = 10,
 	.sdoez_delay = 20,
-	.gdclk_hp_offs = 419,
-	.gdsp_offs = 20,
+	.gdclk_hp_offs = 436,
+	.gdsp_offs = 342,
 	.gdoe_offs = 0,
-	.gdclk_offs = 5,
+	.gdclk_offs = 75,
 	.num_ce = 1,
 };
 
+#define TPS185_PUP        IMX_GPIO_NR(4, 3)
+#define TPS185_WAK        IMX_GPIO_NR(1, 26)
+#define TPS185_VCOM_CTRL  IMX_GPIO_NR(2, 3)
+iomux_v3_cfg_t tps65185_enable_pins[] = {
+        (MX6SL_PAD_KEY_ROW5__GPIO_4_3 ),
+        (MX6SL_PAD_EPDC_SDSHR__GPIO_1_26 ),
+        (MX6SL_PAD_EPDC_VCOM0__GPIO_2_3 ),
+};
 static void setup_epdc_power(void)
 {
-	unsigned int reg;
 
-	/* Setup epdc voltage */
+	/*  tps65185 pmic pins enable */
+        mxc_iomux_v3_setup_multiple_pads(tps65185_enable_pins,
+                                ARRAY_SIZE(tps65185_enable_pins));
 
-	/* EPDC_PWRSTAT - GPIO2[13] for PWR_GOOD status */
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_PWRSTAT__GPIO_2_13);
+        /* tps65185 VCOM_CTRL low */
+        gpio_direction_output(TPS185_VCOM_CTRL, 0);
 
-	/* EPDC_VCOM0 - GPIO2[3] for VCOM control */
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_VCOM0__GPIO_2_3);
+        /*
+         SLEEP
+         tps65185 enter sleep mode whenever WAKEUP pin is pulled low.
+        */
+        gpio_direction_output(TPS185_WAK, 0);
+        gpio_direction_output(TPS185_PUP, 0);
 
-	/* Set as output */
-	reg = readl(GPIO2_BASE_ADDR + GPIO_GDIR);
-	reg |= (1 << 3);
-	writel(reg, GPIO2_BASE_ADDR + GPIO_GDIR);
-
-	/* EPDC_PWRWAKEUP - GPIO2[14] for EPD PMIC WAKEUP */
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_PWRWAKEUP__GPIO_2_14);
-	/* Set as output */
-	reg = readl(GPIO2_BASE_ADDR + GPIO_GDIR);
-	reg |= (1 << 14);
-	writel(reg, GPIO2_BASE_ADDR + GPIO_GDIR);
-
-	/* EPDC_PWRCTRL0 - GPIO2[7] for EPD PWR CTL0 */
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_PWRCTRL0__GPIO_2_7);
-	/* Set as output */
-	reg = readl(GPIO2_BASE_ADDR + GPIO_GDIR);
-	reg |= (1 << 7);
-	writel(reg, GPIO2_BASE_ADDR + GPIO_GDIR);
+        udelay(1000);
+        /*
+         STANDBY
+         tps65185 WAKUP pin is pulled high with PWRUP pin low.
+        */
+        gpio_direction_output(TPS185_WAK, 1);
+        gpio_direction_output(TPS185_PUP, 0);
 }
+
+struct waveform_data_header {
+	unsigned int wi0;
+	unsigned int wi1;
+	unsigned int wi2;
+	unsigned int wi3;
+	unsigned int wi4;
+	unsigned int wi5;
+	unsigned int wi6;
+	unsigned int xwia:24;
+	unsigned int cs1:8;
+	unsigned int wmta:24;
+	unsigned int fvsn:8;
+	unsigned int luts:8;
+	unsigned int mc:8;
+	unsigned int trc:8;
+	unsigned int reserved0_0:8;
+	unsigned int eb:8;
+	unsigned int sb:8;
+	unsigned int reserved0_1:8;
+	unsigned int reserved0_2:8;
+	unsigned int reserved0_3:8;
+	unsigned int reserved0_4:8;
+	unsigned int reserved0_5:8;
+	unsigned int cs2:8;
+};
+
+struct mxcfb_waveform_data_file {
+	struct waveform_data_header wdh;
+	u32 *data;  /* Temperature Range Table + Waveform Data */
+};
 
 int setup_waveform_file(void)
 {
@@ -405,6 +441,8 @@ int setup_waveform_file(void)
 	ulong addr = CONFIG_WAVEFORM_BUF_ADDR;
 	struct mmc *mmc = find_mmc_device(mmc_dev);
 	uint blk_start, blk_cnt, n;
+	struct mxcfb_waveform_data_file *wv_file;
+	int wv_data_offs;
 
 	if (!mmc) {
 		printf("MMC Device %d not found\n", mmc_dev);
@@ -422,7 +460,19 @@ int setup_waveform_file(void)
 				      blk_cnt, (u_char *) addr);
 	flush_cache((ulong) addr, blk_cnt * mmc->read_bl_len);
 
-	return (n == blk_cnt) ? 0 : -1;
+	if(n != blk_cnt) {
+		printf("MMC attempts to read %d blocks but only %d blocks is read\n",
+			blk_cnt, n);
+		return -1;
+	}
+	wv_file = (struct mxcfb_waveform_data_file *)CONFIG_WAVEFORM_BUF_ADDR;
+	wv_data_offs = sizeof(wv_file->wdh) + (wv_file->wdh.trc + 1) + 1;
+	memcpy((void *)CONFIG_WAVEFORM_BUF_ADDR,
+		(void *)(CONFIG_WAVEFORM_BUF_ADDR + wv_data_offs),
+		(CONFIG_WAVEFORM_FILE_SIZE - wv_data_offs));
+	flush_cache((ulong)CONFIG_WAVEFORM_BUF_ADDR, CONFIG_WAVEFORM_FILE_SIZE);
+
+	return 0;
 #else
 	return -1;
 #endif
@@ -441,16 +491,10 @@ static void epdc_enable_pins(void)
 	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_D7__EPDC_SDDO_7);
 	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_GDCLK__EPDC_GDCLK);
 	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_GDSP__EPDC_GDSP);
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_GDOE__EPDC_GDOE);
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_GDRL__EPDC_GDRL);
 	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_SDCLK__EPDC_SDCLK);
 	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_SDOE__EPDC_SDOE);
 	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_SDLE__EPDC_SDLE);
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_SDSHR__EPDC_SDSHR);
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_BDR0__EPDC_BDR_0);
 	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_SDCE0__EPDC_SDCE_0);
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_SDCE1__EPDC_SDCE_1);
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_SDCE2__EPDC_SDCE_2);
 }
 
 static void epdc_disable_pins(void)
@@ -466,35 +510,15 @@ static void epdc_disable_pins(void)
 	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_D7__GPIO_1_14);
 	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_GDCLK__GPIO_1_31);
 	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_GDSP__GPIO_2_2);
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_GDOE__GPIO_2_0);
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_GDRL__GPIO_2_1);
 	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_SDCLK__GPIO_1_23);
 	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_SDOE__GPIO_1_25);
 	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_SDLE__GPIO_1_24);
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_SDSHR__GPIO_1_26);
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_BDR0__GPIO_2_5);
 	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_SDCE0__GPIO_1_27);
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_SDCE1__GPIO_1_28);
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_SDCE2__GPIO_1_29);
 }
 
-static void setup_epdc(void)
+void setup_epdc(void)
 {
 	unsigned int reg;
-
-	/*** epdc Maxim PMIC settings ***/
-
-	/* EPDC PWRSTAT - GPIO2[13] for PWR_GOOD status */
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_PWRSTAT__GPIO_2_13);
-
-	/* EPDC VCOM0 - GPIO2[3] for VCOM control */
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_VCOM0__GPIO_2_3);
-
-	/* UART4 TXD - GPIO2[14] for EPD PMIC WAKEUP */
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_PWRWAKEUP__GPIO_2_14);
-
-	/* EIM_A18 - GPIO2[7] for EPD PWR CTL0 */
-	mxc_iomux_v3_setup_pad(MX6SL_PAD_EPDC_PWRCTRL0__GPIO_2_7);
 
 	/*** Set pixel clock rates for EPDC ***/
 
@@ -543,41 +567,112 @@ static void setup_epdc(void)
 	gd->fb_base = CONFIG_FB_BASE;
 }
 
+#define TPS65185_ADDRESS  0x68
+static int setup_tps65185(void)
+{
+        unsigned char status = 0;
+        unsigned char value = 0;
+
+	i2c_init(CONFIG_SYS_I2C_SPEED, TPS65185_ADDRESS);
+
+        /*
+         VCOM1
+         VCOM[7:0] 200 x -10mv = -2v
+        */
+        value = 0xc8;
+        if (i2c_write(TPS65185_ADDRESS, 0x3, 1, &value, 1)) {
+                printf("Set VOM1 error!\n");
+                return -1;
+        }
+        /*
+         Power-Up Sequence register 1
+         DLY4 delay time set 00 - 3ms
+         DLY3 delay time set 00 - 3ms
+         DLY2 delay time set 00 - 3ms
+         DLY1 delay time set 00 - 3ms
+        */
+        value = 0x00;
+        if (i2c_write(TPS65185_ADDRESS, 0xa, 1, &value, 1)) {
+                printf("Set UPSEQ1 error!\n");
+                return -1;
+        }
+        /*
+         ENABLE
+         Set the ACTIVE bit in the ENABLE register to "1" to execute
+         the power-up sequence and bring up all power rails.
+	*/
+	value = 0x3f;
+        if (i2c_write(TPS65185_ADDRESS, 0x1, 1, &value, 1)) {
+                printf("Set ENABLE error!\n");
+                return -1;
+        }
+        /*
+         Alternative pull the PWRUP pin high (rising edge)
+        */
+        gpio_direction_output(TPS185_PUP, 1);
+
+        udelay(50000);
+        /*
+         POWER GOOD STATUS
+         VDDH_EN VDDH charge pump enable
+         VPOS_EN VPOS LDO charge regulator enable
+         VEE_EN  VEE charge pump enable
+         VNEG_EN VNEG LDO regulator enable
+        */
+        if (!i2c_probe(TPS65185_ADDRESS)) {
+                if (i2c_read(TPS65185_ADDRESS, 0xf, 1, &status, 1)) {
+                        printf("TPS: reg 0xfh read error!\n");
+                        return -1;
+                }
+                printf("TPS: POWER GOOD STATUS 0x0fh-0x%x\n",status);
+        }
+#if defined (DEBUG)
+        if (!i2c_probe(TPS65185_ADDRESS)) {
+                if (i2c_read(TPS65185_ADDRESS, 0x1, 1, &status, 1)) {
+                        printf("TPS: register 0x01h read error!\n");
+                        return -1;
+                }
+                printf("TPS: ENABLE 0x01h-0x%x\n",status);
+        }
+
+        if (!i2c_probe(TPS65185_ADDRESS)) {
+                if (i2c_read(TPS65185_ADDRESS, 0x9, 1, &status, 1)) {
+                        printf("TPS: register 0x09h read error!\n");
+                        return -1;
+                }
+                printf("TPS: UPSEQ0 0x09h-0x%x\n",status);
+        }
+
+        if (!i2c_probe(TPS65185_ADDRESS)) {
+                if (i2c_read(TPS65185_ADDRESS, 0xa, 1, &status, 1)) {
+                        printf("TPS: register 0x0ah read error!\n");
+                        return -1;
+                }
+                printf("TPS: UPSEQ1 0x0ah-0x%x\n",status);
+        }
+
+        if (!i2c_probe(TPS65185_ADDRESS)) {
+                if (i2c_read(TPS65185_ADDRESS, 0x10, 1, &status, 1)) {
+                        printf("TPS: REVID 0x10h read error!\n");
+                        return -1;
+                }
+                printf("TPS: REVID 0x%x\n", status);
+        }
+#endif
+        return 0;
+}
 void epdc_power_on(void)
 {
-	unsigned int reg;
+#ifdef CONFIG_I2C_MXC
+	setup_i2c(CONFIG_SYS_I2C_PORT2);
+        setup_tps65185();
+#endif
+        /* Enable epdc signal pin */
+        epdc_enable_pins();
+        udelay(1000);
 
-	/* Set EPD_PWR_CTL0 to high - enable EINK_VDD (3.15) */
-	reg = readl(GPIO2_BASE_ADDR + GPIO_DR);
-	reg |= (1 << 7);
-	writel(reg, GPIO2_BASE_ADDR + GPIO_DR);
-	udelay(1000);
-
-	/* Enable epdc signal pin */
-	epdc_enable_pins();
-
-	/* Set PMIC Wakeup to high - enable Display power */
-	reg = readl(GPIO2_BASE_ADDR + GPIO_DR);
-	reg |= (1 << 14);
-	writel(reg, GPIO2_BASE_ADDR + GPIO_DR);
-
-	/* Wait for PWRGOOD == 1 */
-	while (1) {
-		reg = readl(GPIO2_BASE_ADDR + GPIO_DR);
-		if (!(reg & (1 << 13)))
-			break;
-
-		udelay(100);
-	}
-
-	/* Enable VCOM */
-	reg = readl(GPIO2_BASE_ADDR + GPIO_DR);
-	reg |= (1 << 3);
-	writel(reg, GPIO2_BASE_ADDR + GPIO_DR);
-
-	reg = readl(GPIO2_BASE_ADDR + GPIO_DR);
-
-	udelay(500);
+        /* Enable VCOM */
+        gpio_direction_output(TPS185_VCOM_CTRL, 1);
 }
 
 void epdc_power_off(void)
@@ -1064,6 +1159,48 @@ int setup_mxc_kpd(void)
 }
 #endif
 
+#define BQ24250_INT  IMX_GPIO_NR(3, 25)
+#define BQ24250_CS   IMX_GPIO_NR(3, 31)
+#define BQ24250_EN1  IMX_GPIO_NR(3, 27)
+#define BQ24250_EN2  IMX_GPIO_NR(3, 29)
+#define WM8962_POWER IMX_GPIO_NR(3, 28)
+#define GSENSOR_INT  IMX_GPIO_NR(4, 5)
+#define CTP_RST      IMX_GPIO_NR(4, 4)
+#define WC_EN1       IMX_GPIO_NR(3, 24)
+#define WC_EN2       IMX_GPIO_NR(3, 26)
+iomux_v3_cfg_t mxc_gpio_pins[] = {
+        (MX6SL_PAD_KEY_ROW0__GPIO_3_25 ),
+        (MX6SL_PAD_KEY_ROW1__GPIO_3_27 ),
+        (MX6SL_PAD_KEY_ROW2__GPIO_3_29 ),
+        (MX6SL_PAD_KEY_ROW3__GPIO_3_31 ),
+        (MX6SL_PAD_KEY_COL2__GPIO_3_28 ),
+        (MX6SL_PAD_KEY_ROW6__GPIO_4_5  ),
+        (MX6SL_PAD_KEY_COL6__GPIO_4_4  ),
+        (MX6SL_PAD_KEY_COL0__GPIO_3_24 ),
+        (MX6SL_PAD_KEY_COL1__GPIO_3_26 ),
+};
+static void mxc_board_init_gpio(void)
+{
+        mxc_iomux_v3_setup_multiple_pads(mxc_gpio_pins,
+                        ARRAY_SIZE(mxc_gpio_pins));
+
+        // pins config as output
+        gpio_direction_output(WM8962_POWER, 1);
+        // BAT bq24250 CS pin active low enable battery charge
+        // BAT bq24250 {EN2,EN1} pins {0,1} externally programmed by ILIM up to 2.0A
+        gpio_direction_output(BQ24250_CS, 0);
+        gpio_direction_output(BQ24250_EN1, 1);
+        gpio_direction_output(BQ24250_EN2, 0);
+        // Touch reset pin output high
+        gpio_direction_output(CTP_RST, 1);
+        // Wireless charge disable
+        gpio_direction_output(WC_EN1, 0);
+        gpio_direction_output(WC_EN2, 0);
+
+        // pins config as input
+        gpio_direction_input(BQ24250_INT);
+        gpio_direction_input(GSENSOR_INT);
+}
 
 int board_init(void)
 {
@@ -1095,25 +1232,51 @@ int board_init(void)
 
 	setup_uart();
 
+	mxc_board_init_gpio();
 #ifdef CONFIG_MXC_FEC
 	setup_fec();
 #endif
 
-#ifdef CONFIG_MXC_EPDC
-	setup_epdc();
-#endif
 	return 0;
 }
 
+#define BQ24250_ADDRESS  0x6A
+static int setup_battery(void)
+{
+        unsigned char status = 0;
+
+	i2c_init(CONFIG_SYS_I2C_SPEED, BQ24250_ADDRESS);
+        if (!i2c_probe(BQ24250_ADDRESS)) {
+                if (i2c_read(BQ24250_ADDRESS, 0, 1, &status, 1)) {
+                        printf("BAT: register#1 read error!\n");
+                        return -1;
+                }
+                printf("BAT: register#1 0x%x\n",status);
+        }
+
+        if (!i2c_probe(BQ24250_ADDRESS)) {
+                if (i2c_read(BQ24250_ADDRESS, 1, 1, &status, 1)) {
+                        printf("BAT: register#2 read error!\n");
+                        return -1;
+                }
+                printf("BAT: register#2 0x%x\n",status);
+        }
+        return 0;
+}
 int board_late_init(void)
 {
 #ifdef CONFIG_I2C_MXC
+/*
 	int ret = 0;
 	setup_i2c(CONFIG_SYS_I2C_PORT);
 	i2c_bus_recovery();
 	ret = setup_pmic_voltages();
 	if (ret)
 		return -1;
+	ret = setup_battery();
+	if (ret)
+		return -1;
+*/
 #endif
 	return 0;
 }

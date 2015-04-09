@@ -47,7 +47,7 @@
 #define I2SR_RX_NO_AK	(1 << 0)
 
 #ifdef CONFIG_SYS_I2C_PORT
-# define I2C_BASE	CONFIG_SYS_I2C_PORT
+# define I2C_BASE	CONFIG_SYS_I2C_PORT2
 #else
 # error "define CONFIG_SYS_I2C_PORT(I2C base address) to use the I2C driver"
 #endif

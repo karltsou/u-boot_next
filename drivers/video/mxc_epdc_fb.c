@@ -20,7 +20,7 @@
  * Based on STMP378X LCDIF
  * Copyright 2008 Embedded Alley Solutions, Inc All Rights Reserved.
  */
-
+#define DEBUG
 #include <common.h>
 #include <lcd.h>
 #include <linux/list.h>
@@ -30,6 +30,7 @@
 #include "mxc_epdc_fb.h"
 
 
+extern void setup_epdc(void);
 extern int setup_waveform_file();
 extern void epdc_power_on();
 extern void epdc_power_off();
@@ -333,7 +334,7 @@ static void draw_mode0(void)
 
 	/* Will timeout after ~4-5 seconds */
 
-	for (i = 0; i < 40; i++) {
+	for (i = 0; i < 100; i++) {
 		if (!epdc_is_lut_active(0)) {
 			debug("Mode0 init complete\n");
 			return;
@@ -356,7 +357,7 @@ static void draw_splash_screen(void)
 	epdc_submit_update(lut_num, panel_info.epdc_data.wv_modes.mode_gc16,
 		UPDATE_MODE_FULL, FALSE, 0);
 
-	for (i = 0; i < 40; i++) {
+	for (i = 0; i < 100; i++) {
 		if (!epdc_is_lut_active(lut_num)) {
 			debug("Splash screen update complete\n");
 			return;
@@ -368,20 +369,7 @@ static void draw_splash_screen(void)
 
 void lcd_enable(void)
 {
-	int i;
-
 	epdc_power_on();
-
-	/* Draw black border around framebuffer*/
-	memset(lcd_base, 0xFF, panel_info.vl_col * panel_info.vl_row);
-	memset(lcd_base, 0x0, 24 * panel_info.vl_col);
-	for (i = 24; i < (panel_info.vl_row - 24); i++) {
-		memset((u8 *)lcd_base + i * panel_info.vl_col, 0x00, 24);
-		memset((u8 *)lcd_base + i * panel_info.vl_col
-			+ panel_info.vl_col - 24, 0x00, 24);
-	}
-	memset((u8 *)lcd_base + panel_info.vl_col * (panel_info.vl_row - 24),
-		0x00, 24 * panel_info.vl_col);
 
 	/* Draw data to display */
 	draw_mode0();
@@ -416,6 +404,15 @@ void lcd_ctrl_init(void *lcdbase)
 	lcd_color_fg = 0xFF;
 	lcd_color_bg = 0xFF;
 
+	/* Get waveform data address and offset */
+	if (setup_waveform_file()) {
+		printf("Can't load waveform data!\n");
+		return;
+	}
+
+	debug("load waveform success\n");
+	setup_epdc();
+
 	/* Reset */
 	REG_SET(EPDC_BASE, EPDC_CTRL, EPDC_CTRL_SFTRST);
 	while (!(REG_RD(EPDC_BASE, EPDC_CTRL) & EPDC_CTRL_CLKGATE))
@@ -445,12 +442,6 @@ void lcd_ctrl_init(void *lcdbase)
 	REG_WR(EPDC_BASE, EPDC_WB_ADDR, panel_info.epdc_data.working_buf_addr);
 	if (rev > 20)
 		REG_WR(EPDC_BASE, EPDC_WB_ADDR_TCE, panel_info.epdc_data.working_buf_addr);
-
-	/* Get waveform data address and offset */
-	if (setup_waveform_file()) {
-		printf("Can't load waveform data!\n");
-		return;
-	}
 
 	/* Set Waveform Buffer pointer */
 	REG_WR(EPDC_BASE, EPDC_WVADDR,
