@@ -1592,7 +1592,7 @@ int do_booti(cmd_tbl_t *cmdtp, int flag, int argc, char *argv[])
 		};
 		strncpy(the_partition.name, ptn, 10);
 		fastboot_flash_add_ptn(&the_partition);
-		/* fastboot_flash_dump_ptn(); */
+		fastboot_flash_dump_ptn();
 
 		pte = fastboot_flash_find_ptn(ptn);
 		if (!pte) {

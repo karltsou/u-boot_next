@@ -90,6 +90,7 @@
 #define	CONFIG_EXTRA_ENV_SETTINGS					\
 		"netdev=eth0\0"						\
 		"ethprime=FEC0\0"					\
-		"fastboot_dev=mmc1\0"					\
-		"bootcmd=booti mmc1\0"
+		"splashimage=0x80800000\0"				\
+		"fastboot_dev=mmc0\0"					\
+		"bootcmd=booti mmc0\0"
 #endif

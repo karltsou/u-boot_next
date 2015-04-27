@@ -1166,6 +1166,7 @@ int setup_mxc_kpd(void)
 #define WM8962_POWER IMX_GPIO_NR(3, 28)
 #define GSENSOR_INT  IMX_GPIO_NR(4, 5)
 #define CTP_RST      IMX_GPIO_NR(4, 4)
+#define CTP_INT      IMX_GPIO_NR(2, 10)
 #define WC_EN1       IMX_GPIO_NR(3, 24)
 #define WC_EN2       IMX_GPIO_NR(3, 26)
 iomux_v3_cfg_t mxc_gpio_pins[] = {
@@ -1178,6 +1179,7 @@ iomux_v3_cfg_t mxc_gpio_pins[] = {
         (MX6SL_PAD_KEY_COL6__GPIO_4_4  ),
         (MX6SL_PAD_KEY_COL0__GPIO_3_24 ),
         (MX6SL_PAD_KEY_COL1__GPIO_3_26 ),
+        (MX6SL_PAD_EPDC_PWRCTRL3__GPIO_2_10),
 };
 static void mxc_board_init_gpio(void)
 {
@@ -1200,6 +1202,7 @@ static void mxc_board_init_gpio(void)
         // pins config as input
         gpio_direction_input(BQ24250_INT);
         gpio_direction_input(GSENSOR_INT);
+        gpio_direction_input(CTP_INT);
 }
 
 int board_init(void)
