@@ -175,7 +175,7 @@ iomux_v3_cfg_t usdhc1_pads[] = {
 };
 
 iomux_v3_cfg_t usdhc2_pads[] = {
-	/* boot SD */
+	/* 8-bit eMMC */
 	MX6SL_PAD_SD2_CLK__USDHC2_CLK,
 	MX6SL_PAD_SD2_CMD__USDHC2_CMD,
 	MX6SL_PAD_SD2_DAT0__USDHC2_DAT0,
