@@ -235,6 +235,7 @@ struct epdc_data_struct {
 	/* Waveform mode definitions */
 	struct waveform_modes wv_modes;
 	struct epdc_timing_params epdc_timings;
+	int buf_pix_fmt;
 };
 
 typedef struct vidinfo {

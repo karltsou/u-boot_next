@@ -174,7 +174,7 @@ static void epdc_init_settings(void)
 
 	/* EPDC_FORMAT - 2bit TFT and 4bit Buf pixel format */
 	reg_val = EPDC_FORMAT_TFT_PIXEL_FORMAT_2BIT
-		| EPDC_FORMAT_BUF_PIXEL_FORMAT_P4N
+		| panel_info.epdc_data.buf_pix_fmt
 		| ((0x0 << EPDC_FORMAT_DEFAULT_TFT_PIXEL_OFFSET) &
 		EPDC_FORMAT_DEFAULT_TFT_PIXEL_MASK);
 	REG_WR(EPDC_BASE, EPDC_FORMAT, reg_val);
@@ -279,7 +279,7 @@ static void epdc_init_settings(void)
 	reg_val = EPDC_TCE_SDCFG_SDCLK_HOLD | EPDC_TCE_SDCFG_SDSHR
 		| ((num_ce << EPDC_TCE_SDCFG_NUM_CE_OFFSET) & EPDC_TCE_SDCFG_NUM_CE_MASK)
 		| EPDC_TCE_SDCFG_SDDO_REFORMAT_FLIP_PIXELS
-		| ((panel_info.vl_col << EPDC_TCE_SDCFG_PIXELS_PER_CE_OFFSET) &
+		| ((panel_info.vl_col/num_ce << EPDC_TCE_SDCFG_PIXELS_PER_CE_OFFSET) &
 		EPDC_TCE_SDCFG_PIXELS_PER_CE_MASK);
 	REG_WR(EPDC_BASE, EPDC_TCE_SDCFG, reg_val);
 

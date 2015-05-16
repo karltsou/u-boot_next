@@ -73,6 +73,9 @@ static enum boot_device boot_dev;
 #define EPDC_PAD_CTRL    (PAD_CTL_PKE | PAD_CTL_SPEED_MED |     \
         PAD_CTL_DSE_40ohm | PAD_CTL_HYS)
 
+#define        EPDC_FORMAT_BUF_PIXEL_FORMAT_P4N 0x400
+#define        EPDC_FORMAT_BUF_PIXEL_FORMAT_P5N 0x500
+
 int get_mmc_env_devno(void);
 int i2c_bus_recovery(void);
 static void setup_i2c(unsigned int module_base);
@@ -327,6 +330,9 @@ int setup_splash_image(void)
 				      blk_cnt, (u_char *) addr);
 	flush_cache((ulong) addr, blk_cnt * mmc->read_bl_len);
 
+	printf("MMC blk start %d attempts to read %d blocks but only %d blocks is read\n",
+                        blk_start, blk_cnt, n);
+
 	return (n == blk_cnt) ? 0 : -1;
 #endif
 
@@ -460,13 +466,20 @@ int setup_waveform_file(void)
 				      blk_cnt, (u_char *) addr);
 	flush_cache((ulong) addr, blk_cnt * mmc->read_bl_len);
 
-	if(n != blk_cnt) {
-		printf("MMC attempts to read %d blocks but only %d blocks is read\n",
-			blk_cnt, n);
+	printf("MMC blk start %d attempts to read %d blocks but only %d blocks is read\n",
+			blk_start, blk_cnt, n);
+
+	if(n != blk_cnt)
 		return -1;
-	}
+
 	wv_file = (struct mxcfb_waveform_data_file *)CONFIG_WAVEFORM_BUF_ADDR;
 	wv_data_offs = sizeof(wv_file->wdh) + (wv_file->wdh.trc + 1) + 1;
+	printf("\nWaveform data address = %08x\n", wv_data_offs);
+
+	panel_info.epdc_data.buf_pix_fmt = EPDC_FORMAT_BUF_PIXEL_FORMAT_P4N;
+	if ((wv_file->wdh.luts & 0xC) == 0x4)
+		panel_info.epdc_data.buf_pix_fmt = EPDC_FORMAT_BUF_PIXEL_FORMAT_P5N;
+
 	memcpy((void *)CONFIG_WAVEFORM_BUF_ADDR,
 		(void *)(CONFIG_WAVEFORM_BUF_ADDR + wv_data_offs),
 		(CONFIG_WAVEFORM_FILE_SIZE - wv_data_offs));
