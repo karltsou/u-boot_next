@@ -295,6 +295,7 @@ init_fnc_t *init_sequence[] = {
 #endif
 #if defined(CONFIG_DISPLAY_BOARDINFO)
 	checkboard,		/* display board info */
+	check_pwrkey,		/* power key checked */
 #endif
 #if defined(CONFIG_HARD_I2C) || defined(CONFIG_SOFT_I2C)
 	init_func_i2c,

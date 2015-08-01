@@ -1183,6 +1183,8 @@ int setup_mxc_kpd(void)
 #define WC_EN1       IMX_GPIO_NR(3, 24)
 #define WC_EN2       IMX_GPIO_NR(3, 26)
 #define EPDC_PWR_EN  IMX_GPIO_NR(2, 14)
+#define HOME_KEY     IMX_GPIO_NR(4, 0)
+#define POWER_KEY    IMX_GPIO_NR(4, 2)
 iomux_v3_cfg_t mxc_gpio_pins[] = {
         (MX6SL_PAD_KEY_ROW0__GPIO_3_25 ),
         (MX6SL_PAD_KEY_ROW1__GPIO_3_27 ),
@@ -1195,6 +1197,8 @@ iomux_v3_cfg_t mxc_gpio_pins[] = {
         (MX6SL_PAD_KEY_COL1__GPIO_3_26 ),
         (MX6SL_PAD_EPDC_PWRCTRL3__GPIO_2_10),
         (MX6SL_PAD_EPDC_PWRWAKEUP__GPIO_2_14),
+        (MX6SL_PAD_KEY_COL4__GPIO_4_0),
+        (MX6SL_PAD_KEY_COL5__GPIO_4_2),
 };
 static void mxc_board_init_gpio(void)
 {
@@ -1219,6 +1223,37 @@ static void mxc_board_init_gpio(void)
         gpio_direction_input(BQ24250_INT);
         gpio_direction_input(GSENSOR_INT);
         gpio_direction_input(CTP_INT);
+        gpio_direction_input(HOME_KEY);
+        gpio_direction_input(POWER_KEY);
+}
+static void mdelay(unsigned long msec)
+{
+	unsigned long i;
+	for (i = 0; i < msec; i++)
+		udelay(1000);
+}
+/*
+  Power Key: press & hold more than 2 seconds
+*/
+int check_pwrkey()
+{
+	int key, key2;
+	int ret = 0;
+
+	printf("PWR_KEY: wait for key press & hold more than 2sec\n");
+
+	while (1) {
+
+		key = gpio_get_value(HOME_KEY);
+
+		mdelay(1000);
+
+		key2 = gpio_get_value(HOME_KEY);
+
+		if (!key && !key2)
+			break;
+	}
+	return ret;
 }
 
 int board_init(void)
@@ -1252,6 +1287,7 @@ int board_init(void)
 	setup_uart();
 
 	mxc_board_init_gpio();
+
 #ifdef CONFIG_MXC_FEC
 	setup_fec();
 #endif
